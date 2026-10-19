@@ -39,6 +39,7 @@ services:
 
   # ---------- 后端：NestJS + Prisma ----------
   server:
+    image: bmf-server
     build:
       context: ./server
       dockerfile: Dockerfile
@@ -62,6 +63,7 @@ services:
 
   # ---------- 前端：Vite 构建 + Nginx 静态托管 + 反向代理 /api ----------
   web:
+    image: bmf-web
     build:
       context: ./client
       dockerfile: Dockerfile
