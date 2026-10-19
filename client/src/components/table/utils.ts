@@ -1,4 +1,4 @@
-import type {FieldType, QueryParams, TableField} from './types'
+import type { FieldType, QueryParams, TableField } from "./types";
 
 /**
  * 公用表格组件的纯函数工具集。
@@ -17,7 +17,7 @@ import type {FieldType, QueryParams, TableField} from './types'
  *    自定义页面写 <template #action-ship="{ row }"> 就能接管这个按钮。
  */
 export function resolveActionSlotName(value: string): string {
-    return `action-${String(value || '').trim()}`
+  return `action-${String(value || "").trim()}`;
 }
 
 /**
@@ -28,22 +28,22 @@ export function resolveActionSlotName(value: string): string {
  * 所以推荐优先用 field.slot，这里给「没拿到配置时」兜底。
  */
 export function resolveColumnSlotName(fieldName: string): string {
-    return `col-${String(fieldName || '').trim()}`
+  return `col-${String(fieldName || "").trim()}`;
 }
 
 /** 这一列是否要显示（visible 不写默认显示） */
 export function isColumnVisible(field: TableField): boolean {
-    return field.visible !== false
+  return field.visible !== false;
 }
 
 /** 过滤出要显示的列，并按 sort 排序 */
 export function pickVisibleColumns(fields: TableField[]): TableField[] {
-    return (fields || []).filter(isColumnVisible).sort((a, b) => (a.sort || 0) - (b.sort || 0))
+  return (fields || []).filter(isColumnVisible).sort((a, b) => (a.sort || 0) - (b.sort || 0));
 }
 
 /** 过滤出搜索项（只有 searchable === true 的字段） */
 export function pickSearchFields(fields: TableField[]): TableField[] {
-    return (fields || []).filter((field) => field.searchable === true)
+  return (fields || []).filter((field) => field.searchable === true);
 }
 
 /**
@@ -54,31 +54,32 @@ export function pickSearchFields(fields: TableField[]): TableField[] {
  *   表格里只显示日期部分，避免一行字太长。
  */
 export function formatCellValue(value: any, type: FieldType): string {
-    if (value === null || value === undefined || value === '') return ''
-    if (type === 'boolean') return value === true || value === 'true' || value === 1 || value === '1' ? '是' : '否'
-    if (type === 'date') return String(value).slice(0, 10)
-    if (type === 'datetime') return String(value).replace('T', ' ').slice(0, 19)
-    if (type === 'number') {
-        const numberValue = Number(value)
-        return Number.isFinite(numberValue) ? String(numberValue) : String(value)
-    }
-    return String(value)
+  if (value === null || value === undefined || value === "") return "";
+  if (type === "boolean") return value === true || value === "true" || value === 1 || value === "1" ? "是" : "否";
+  if (type === "date") return String(value).slice(0, 10);
+  if (type === "datetime") return String(value).replace("T", " ").slice(0, 19);
+  if (type === "number") {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? String(numberValue) : String(value);
+  }
+  return String(value);
 }
 
 /** 搜索项的初始值：区间搜索用数组，其它用空字符串 */
 export function defaultSearchValues(fields: TableField[]): Record<string, any> {
-    const values: Record<string, any> = {}
-    for (const field of fields || []) {
-        values[field.name] = field.searchOp === 'between' ? [] : ''
-    }
-    return values
+  const values: Record<string, any> = {};
+  for (const field of fields || []) {
+    values[field.name] = field.searchOp === "between" ? [] : "";
+  }
+  return values;
 }
 
 /** 判断一个搜索值是不是空的（空数组、空字符串、null 都算空） */
 function isEmptyValue(value: any): boolean {
-    if (value === null || value === undefined || value === '') return true
-    if (Array.isArray(value)) return value.length === 0 || value.every((item) => item === '' || item === null || item === undefined)
-    return false
+  if (value === null || value === undefined || value === "") return true;
+  if (Array.isArray(value))
+    return value.length === 0 || value.every((item) => item === "" || item === null || item === undefined);
+  return false;
 }
 
 /**
@@ -96,30 +97,38 @@ function isEmptyValue(value: any): boolean {
  *   空的搜索项会被跳过，不会生成 `status = ''` 这种把结果查空的无效条件。
  */
 export function buildFiltersPayload(
-    values: Record<string, any>,
-    fields: TableField[],
-    mode: string = 'AND',
-): { mode: string; conditions: Array<{ field: string; op: string; value: any }> } {
-    const conditions: Array<{ field: string; op: string; value: any }> = []
+  values: Record<string, any>,
+  fields: TableField[],
+  mode: string = "AND",
+): {
+  mode: string;
+  conditions: Array<{ field: string; op: string; value: any }>;
+} {
+  const conditions: Array<{ field: string; op: string; value: any }> = [];
 
-    for (const field of fields || []) {
-        const raw = values?.[field.name]
-        if (isEmptyValue(raw)) continue
+  for (const field of fields || []) {
+    const raw = values?.[field.name];
+    if (isEmptyValue(raw)) continue;
 
-        const op = field.searchOp || 'eq'
-        let value: any = raw
+    const op = field.searchOp || "eq";
+    let value: any = raw;
 
-        if (op === 'between') {
-            value = Array.isArray(raw) ? raw : [raw, raw]
-        } else if (op === 'in' || op === 'notIn') {
-            value = Array.isArray(raw) ? raw : String(raw).split(',').map((item) => item.trim()).filter(Boolean)
-        }
-
-        conditions.push({field: field.name, op, value})
+    if (op === "between") {
+      value = Array.isArray(raw) ? raw : [raw, raw];
+    } else if (op === "in" || op === "notIn") {
+      value = Array.isArray(raw)
+        ? raw
+        : String(raw)
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean);
     }
 
-    const upperMode = String(mode || 'AND').toUpperCase()
-    return {mode: upperMode, conditions}
+    conditions.push({ field: field.name, op, value });
+  }
+
+  const upperMode = String(mode || "AND").toUpperCase();
+  return { mode: upperMode, conditions };
 }
 
 /**
@@ -129,37 +138,37 @@ export function buildFiltersPayload(
  * 直接塞对象会被序列化成 [object Object]。
  */
 export function buildQueryParams(options: {
-    page: number
-    pageSize: number
-    searchValues: Record<string, any>
-    fields: TableField[]
-    mode?: string
+  page: number;
+  pageSize: number;
+  searchValues: Record<string, any>;
+  fields: TableField[];
+  mode?: string;
 }): QueryParams {
-    const payload = buildFiltersPayload(options.searchValues, options.fields, options.mode)
-    const params: QueryParams = {
-        page: Math.max(1, Number(options.page) || 1),
-        pageSize: Math.max(1, Number(options.pageSize) || 20),
-    }
-    // 没有任何条件就不传 filters，URL 更干净，后端也走「不加 WHERE」的快路径
-    if (payload.conditions.length > 0) {
-        params.filters = JSON.stringify(payload)
-    }
-    return params
+  const payload = buildFiltersPayload(options.searchValues, options.fields, options.mode);
+  const params: QueryParams = {
+    page: Math.max(1, Number(options.page) || 1),
+    pageSize: Math.max(1, Number(options.pageSize) || 20),
+  };
+  // 没有任何条件就不传 filters，URL 更干净，后端也走「不加 WHERE」的快路径
+  if (payload.conditions.length > 0) {
+    params.filters = JSON.stringify(payload);
+  }
+  return params;
 }
 
 /** 每页条数限制在 1~200，和後端保持一致 */
 export function clampPageSize(value: any, fallback = 20): number {
-    const size = Number(value) || fallback
-    return Math.min(200, Math.max(1, size))
+  const size = Number(value) || fallback;
+  return Math.min(200, Math.max(1, size));
 }
 
 /** 新建一行时的初始表单值 */
 export function buildEmptyForm(fields: TableField[]): Record<string, any> {
-    const model: Record<string, any> = {}
-    for (const field of fields || []) {
-        if (field.type === 'boolean') model[field.name] = false
-        else if (field.type === 'number' || field.type === 'integer') model[field.name] = undefined
-        else model[field.name] = ''
-    }
-    return model
+  const model: Record<string, any> = {};
+  for (const field of fields || []) {
+    if (field.type === "boolean") model[field.name] = false;
+    else if (field.type === "number" || field.type === "integer") model[field.name] = undefined;
+    else model[field.name] = "";
+  }
+  return model;
 }

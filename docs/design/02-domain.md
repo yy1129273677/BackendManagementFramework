@@ -129,16 +129,16 @@ erDiagram
 
 一条记录就是一张表的「说明书」：
 
-| 字段 | 内容 |
-|---|---|
-| `tcid` | 表格编号，前端凭它取配置 |
-| `fields` | `[{name,label,type,visible,searchable,searchOp,editable,required,width,slot,options,sort}]` |
-| `search_mode` | 多条件组合方式 |
-| `operations` | 增删改开关 + 各自的权限码 |
-| `custom_actions` | `[{label,value,permission,type,confirm}]` |
-| `physical_table` | 对应的物理表名 |
+| 字段             | 内容                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------- |
+| `tcid`           | 表格编号，前端凭它取配置                                                                    |
+| `fields`         | `[{name,label,type,visible,searchable,searchOp,editable,required,width,slot,options,sort}]` |
+| `search_mode`    | 多条件组合方式                                                                              |
+| `operations`     | 增删改开关 + 各自的权限码                                                                   |
+| `custom_actions` | `[{label,value,permission,type,confirm}]`                                                   |
+| `physical_table` | 对应的物理表名                                                                              |
 
-### 2.7 biz_&lt;tcid&gt;（物理表）
+### 2.7 biz\_&lt;tcid&gt;（物理表）
 
 - 固定列：`id uuid pk`、`created_at`、`updated_at`
 - 业务列：配置里的字段，全部可空（这样加字段不会失败，必填在接口层校验）
@@ -148,18 +148,18 @@ erDiagram
 
 这些规则任何时候都必须成立，写代码/加功能时要守住：
 
-| # | 不变式 | 违反的后果 |
-|---|---|---|
-| I1 | 任何业务查询都必须带 `system_id` | 跨租户数据泄露（最严重） |
-| I2 | 物理表名只能是 `biz_` + 合法标识符 | SQL 注入 / 误删系统表 |
-| I3 | 字段名必须过 `isValidIdentifier()` | SQL 注入 |
-| I4 | 表格数据值一律参数化，绝不拼 SQL 文本 | SQL 注入 |
-| I5 | `tcid` 生成后不可变 | 前端硬编码的 TCID、已配路由全部失效 |
-| I6 | 超管才允许通过 `X-System-Code` 切换子系统 | 普通用户横向越权 |
-| I7 | 物理表只做加法（ADD COLUMN），不做删除/改类型 | 数据丢失 |
-| I8 | 密码只以 bcrypt 哈希形式存在 | 拖库即泄露明文 |
-| I9 | 权限判定必须在后端，前端隐藏只是体验 | 绕过前端即越权 |
-| I10 | 删除子系统/表格配置是破坏性操作，必须二次确认 | 数据不可恢复 |
+| #   | 不变式                                        | 违反的后果                          |
+| --- | --------------------------------------------- | ----------------------------------- |
+| I1  | 任何业务查询都必须带 `system_id`              | 跨租户数据泄露（最严重）            |
+| I2  | 物理表名只能是 `biz_` + 合法标识符            | SQL 注入 / 误删系统表               |
+| I3  | 字段名必须过 `isValidIdentifier()`            | SQL 注入                            |
+| I4  | 表格数据值一律参数化，绝不拼 SQL 文本         | SQL 注入                            |
+| I5  | `tcid` 生成后不可变                           | 前端硬编码的 TCID、已配路由全部失效 |
+| I6  | 超管才允许通过 `X-System-Code` 切换子系统     | 普通用户横向越权                    |
+| I7  | 物理表只做加法（ADD COLUMN），不做删除/改类型 | 数据丢失                            |
+| I8  | 密码只以 bcrypt 哈希形式存在                  | 拖库即泄露明文                      |
+| I9  | 权限判定必须在后端，前端隐藏只是体验          | 绕过前端即越权                      |
+| I10 | 删除子系统/表格配置是破坏性操作，必须二次确认 | 数据不可恢复                        |
 
 ## 4. 数据流总览（文字版）
 

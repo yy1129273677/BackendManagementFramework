@@ -1,6 +1,6 @@
-import {CallHandler, ExecutionContext, Injectable, NestInterceptor} from '@nestjs/common'
-import {Observable} from 'rxjs'
-import {map} from 'rxjs/operators'
+import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from "@nestjs/common";
+import { Observable } from "rxjs";
+import { map } from "rxjs/operators";
 
 /**
  * 统一响应包装器。
@@ -16,21 +16,21 @@ import {map} from 'rxjs/operators'
  */
 @Injectable()
 export class ResponseInterceptor<T> implements NestInterceptor<T, any> {
-    intercept(context: ExecutionContext, next: CallHandler<T>): Observable<any> {
-        return next.handle().pipe(
-            map((data: any) => {
-                // 已经被包装过就不再重复包一层
-                if (data && typeof data === 'object' && data.__wrapped === true) {
-                    const {__wrapped, ...rest} = data
-                    return rest
-                }
+  intercept(context: ExecutionContext, next: CallHandler<T>): Observable<any> {
+    return next.handle().pipe(
+      map((data: any) => {
+        // 已经被包装过就不再重复包一层
+        if (data && typeof data === "object" && data.__wrapped === true) {
+          const { __wrapped, ...rest } = data;
+          return rest;
+        }
 
-                return {
-                    code: 0,
-                    message: 'ok',
-                    data: data === undefined ? null : data,
-                }
-            }),
-        )
-    }
+        return {
+          code: 0,
+          message: "ok",
+          data: data === undefined ? null : data,
+        };
+      }),
+    );
+  }
 }

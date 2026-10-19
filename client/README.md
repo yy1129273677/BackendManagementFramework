@@ -11,17 +11,17 @@
 
 ### 1.1 主系统页面（写死在代码里，给超管用）
 
-| 路由 | 页面 | 作用 |
-|---|---|---|
-| `/login` | 登录页 | 用户名 + 密码 + 系统编码（留空=主系统） |
-| `/dashboard` | 首页 | 四步上手指引 + 后端/数据库/pgvector 状态 |
-| `/system` | 子系统管理 | 建/改/删子系统，「进入配置」切换当前子系统 |
-| `/table-config` | 表格配置（TCID 设计器） | 配字段、搜索模式、操作权限、自定义按钮；保存后生成 TCID |
-| `/route` | 路由管理 | 建 CUSTOM（手写页面）或 TABLE（TCID）路由，菜单即时生效 |
-| `/user` | 用户管理 | 子系统内的用户增删改、分配角色 |
-| `/role` | 角色管理 | 勾选权限码 |
-| `/dict` | 业务字典 | 维护下拉选项（如订单状态） |
-| `/preview/:tcid` | 表格预览 | 配完表不建路由也能先看效果 |
+| 路由             | 页面                    | 作用                                                    |
+| ---------------- | ----------------------- | ------------------------------------------------------- |
+| `/login`         | 登录页                  | 用户名 + 密码 + 系统编码（留空=主系统）                 |
+| `/dashboard`     | 首页                    | 四步上手指引 + 后端/数据库/pgvector 状态                |
+| `/system`        | 子系统管理              | 建/改/删子系统，「进入配置」切换当前子系统              |
+| `/table-config`  | 表格配置（TCID 设计器） | 配字段、搜索模式、操作权限、自定义按钮；保存后生成 TCID |
+| `/route`         | 路由管理                | 建 CUSTOM（手写页面）或 TABLE（TCID）路由，菜单即时生效 |
+| `/user`          | 用户管理                | 子系统内的用户增删改、分配角色                          |
+| `/role`          | 角色管理                | 勾选权限码                                              |
+| `/dict`          | 业务字典                | 维护下拉选项（如订单状态）                              |
+| `/preview/:tcid` | 表格预览                | 配完表不建路由也能先看效果                              |
 
 ### 1.2 子系统页面（运行时从数据库生成）
 
@@ -42,20 +42,20 @@ src/components/table/
 
 #### props
 
-| 名称 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `tcid` | string | ✅ | 表格配置编号，决定渲染哪张表 |
-| `pageSize` | number | | 覆盖配置里的每页条数 |
-| `showSearch` | boolean | | 是否显示搜索栏，默认 true |
-| `height` | string | | 表格高度，长表格建议传，如 `"520px"` |
+| 名称         | 类型    | 必填 | 说明                                 |
+| ------------ | ------- | ---- | ------------------------------------ |
+| `tcid`       | string  | ✅   | 表格配置编号，决定渲染哪张表         |
+| `pageSize`   | number  |      | 覆盖配置里的每页条数                 |
+| `showSearch` | boolean |      | 是否显示搜索栏，默认 true            |
+| `height`     | string  |      | 表格高度，长表格建议传，如 `"520px"` |
 
 #### 插槽（自定义的关键）
 
-| 插槽名 | 作用域 | 说明 |
-|---|---|---|
-| `#action-<value>` | `{ row, action, reload }` | 接管配置里 `value=<value>` 的自定义按钮 |
-| `#col-<字段名>` | `{ row, column, value }` | 接管某一列的渲染（也支持配置里自定义的 `slot` 名） |
-| `#toolbar` | `{ reload, config }` | 表格右上角工具栏追加自己的按钮 |
+| 插槽名            | 作用域                    | 说明                                               |
+| ----------------- | ------------------------- | -------------------------------------------------- |
+| `#action-<value>` | `{ row, action, reload }` | 接管配置里 `value=<value>` 的自定义按钮            |
+| `#col-<字段名>`   | `{ row, column, value }`  | 接管某一列的渲染（也支持配置里自定义的 `slot` 名） |
+| `#toolbar`        | `{ reload, config }`      | 表格右上角工具栏追加自己的按钮                     |
 
 > **插槽名必须和配置里的 `value` 完全一致**（大小写敏感）。
 > 配置里按钮 `value = "ship"` → 页面写 `#action-ship`。
@@ -84,15 +84,15 @@ tableRef.value.getRows()     // 当前页数据
 
 ```vue
 <script setup lang="ts">
-import Table from '@/components/table/index.vue'
-import {tableDataApi} from '@/api'
+import Table from "@/components/table/index.vue";
+import { tableDataApi } from "@/api";
 
-const TCID = 'TDEMOORDERS'
+const TCID = "TDEMOORDERS";
 
 /** 接管「标记发货」按钮 */
 async function handleShip({ row, reload }) {
-  await tableDataApi.update(TCID, row.id, {status: 'shipped'})
-  reload()
+  await tableDataApi.update(TCID, row.id, { status: "shipped" });
+  reload();
 }
 </script>
 
@@ -100,7 +100,7 @@ async function handleShip({ row, reload }) {
   <Table :tcid="TCID">
     <!-- 自定义按钮：配置里 value = 'ship' -->
     <template #action-ship="{ row, reload }">
-      <el-button link type="success" @click="handleShip({row, reload})">标记发货</el-button>
+      <el-button link type="success" @click="handleShip({ row, reload })">标记发货</el-button>
     </template>
 
     <!-- 自定义单元格：把状态渲染成彩色标签 -->
@@ -115,15 +115,15 @@ async function handleShip({ row, reload }) {
 
 ## 2. 技术栈
 
-| 类别 | 选型 | 说明 |
-|---|---|---|
-| 框架 | Vue 3（`<script setup>`） | Composition API |
-| 构建 | Vite 5 | 开发冷启动快，`import.meta.glob` 做动态页面加载 |
-| UI | Element Plus 2.9 | 全量引入（见"注意事项"） |
-| 路由 | vue-router 4（**hash 模式**） | 部署不需要 Nginx 配 try_files 回退 |
-| 状态 | Pinia | `stores/auth.ts` 登录态，`stores/menu.ts` 动态菜单 |
-| 请求 | axios | `api/request.ts` 统一拦截：token、X-System-Code、拆包装、401 跳登录 |
-| 测试 | vitest | `npm test`，纯函数单测，不需要浏览器环境 |
+| 类别 | 选型                          | 说明                                                                |
+| ---- | ----------------------------- | ------------------------------------------------------------------- |
+| 框架 | Vue 3（`<script setup>`）     | Composition API                                                     |
+| 构建 | Vite 5                        | 开发冷启动快，`import.meta.glob` 做动态页面加载                     |
+| UI   | Element Plus 2.9              | 全量引入（见"注意事项"）                                            |
+| 路由 | vue-router 4（**hash 模式**） | 部署不需要 Nginx 配 try_files 回退                                  |
+| 状态 | Pinia                         | `stores/auth.ts` 登录态，`stores/menu.ts` 动态菜单                  |
+| 请求 | axios                         | `api/request.ts` 统一拦截：token、X-System-Code、拆包装、401 跳登录 |
+| 测试 | vitest                        | `npm test`，纯函数单测，不需要浏览器环境                            |
 
 ---
 
@@ -173,9 +173,14 @@ npm run dev
 ### 4.2 构建与预览
 
 ```bash
-npm run build        # 产物在 dist/
+npm run build        # 先 vue-tsc 类型检查，通过后才 vite build，产物在 dist/
+npm run typecheck    # 只做类型检查（等价于 vue-tsc --noEmit），最快发现问题
 npm run preview      # 本地起个静态服务看构建产物（默认 4173 端口）
 ```
+
+> ⚠️ **为什么要单独做类型检查**：`vite build` 用 esbuild，**只转译不检查类型**——
+> 类型写错也能构建成功，只会在编辑器里飘红。所以 `build` 脚本是 `vue-tsc --noEmit && vite build`，
+> 类型错误会让构建直接失败。改代码时先跑 `npm run typecheck` 比等构建快得多。
 
 ### 4.3 测试
 
@@ -185,12 +190,13 @@ npm test             # vitest run，18 个用例
 
 ### 4.4 npm scripts 速查
 
-| 命令 | 作用 |
-|---|---|
-| `npm run dev` | 开发服务器（5173，带 /api 代理） |
-| `npm run build` | 生产构建 → `dist/` |
-| `npm run preview` | 预览构建产物 |
-| `npm test` | vitest 单测 |
+| 命令                | 作用                             |
+| ------------------- | -------------------------------- |
+| `npm run dev`       | 开发服务器（5173，带 /api 代理） |
+| `npm run typecheck` | vue-tsc 类型检查（不产出文件）   |
+| `npm run build`     | 类型检查 + 生产构建 → `dist/`    |
+| `npm run preview`   | 预览构建产物                     |
+| `npm test`          | vitest 单测                      |
 
 ---
 
@@ -213,21 +219,38 @@ npm test             # vitest run，18 个用例
    自定义页面必须是 `src/views` 下真实存在的 `.vue` 文件。
    开发时新增文件 Vite 会自动感知；`npm run build` 之后新增的文件不会自动出现在产物里，必须重新构建。
 
-5. **前端隐藏按钮 ≠ 安全**
+5. **`return ElMessage.warning(...)` 会报类型错误**
+   `ElMessage` 返回的是 `MessageHandler` 而不是 `void`，所以 `async function (): Promise<void>` 里
+   `return ElMessage.warning('x')` 会红。正确写法是分开写：
+
+   ```ts
+   if (!form.name.trim()) {
+     ElMessage.warning("请填写名称");
+     return;
+   }
+   ```
+
+6. **动态插槽的类型推断不了，用 `row` 而不是 `value`**
+   `<Table>` 的列插槽名是 `col-<字段名>`，是运行时拼的，TypeScript 推断不出作用域名。
+   所以自定义单元格时用 `#col-xxx="{ row }"` 读 `row.xxx`，别用 `{ value }`——
+   运行时 `value` 是有的，但类型检查会报"Property 'value' does not exist"。
+   按钮插槽 `#action-<value>` 不受影响（作用域名是固定的 `action`），可以用 `{ row, action, reload }`。
+
+7. **前端隐藏按钮 ≠ 安全**
    权限判断在前端只是体验（不显示不能点的按钮）。
    真正的拦截在后端守卫，前端改代码也绕不过去。
 
-6. **权限码两份清单要同步**
+8. **权限码两份清单要同步**
    `client/src/constants/permissions.ts` 和后端 `server/src/common/constants.ts` 的 `ALL_PERMISSIONS`。
    实际渲染角色编辑页时用的是后端接口 `/api/roles/permissions`，前端这份用于兜底和类型提示。
 
-7. **刷新业务页面**
+9. **刷新业务页面**
    动态路由在 `main.ts` 里会预加载（本地有 token 时），所以刷新 `/order/list` 不会掉回首页。
    如果菜单还没加载完就访问，路由守卫会再加载一次。
 
-8. **切换子系统会整页刷新**
-   顶栏切换"正在配置的子系统"是 `location.reload()`，因为动态路由、菜单、缓存都要重建。
-   代价是几百毫秒，换来的是"绝不会串数据"。
+10. **切换子系统会整页刷新**
+    顶栏切换"正在配置的子系统"是 `location.reload()`，因为动态路由、菜单、缓存都要重建。
+    代价是几百毫秒，换来的是"绝不会串数据"。
 
 ---
 
@@ -235,6 +258,7 @@ npm test             # vitest run，18 个用例
 
 **Q：打开页面白屏 / 菜单是空的**
 A：按 F12 看 Console 和 Network：
+
 - 401 → 登录过期，重新登录
 - `/api/routes/my` 403/500 → 后端没起或数据库没初始化
 - 动态路由没注册 → 确认当前子系统里配了路由
@@ -260,3 +284,17 @@ A：npm 默认缓存在用户目录，受限环境写不进去。把缓存指到
 ```bash
 npm install --cache .npm-cache
 ```
+
+---
+
+## 7. 代码格式化
+
+缩进 **2 空格**，其余风格由 Prettier 决定，不要在 `.vue` / `.ts` 里手写缩进。
+
+```bash
+cd ..            # 回到仓库根目录
+npm install      # 只需一次，装根目录的开发期 Prettier
+npm run format   # 格式化整个仓库
+```
+
+编辑器里开了 formatOnSave 的话，Ctrl+S 就是同一套规则，不会二次重排。

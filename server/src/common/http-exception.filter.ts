@@ -1,5 +1,5 @@
-import {ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger} from '@nestjs/common'
-import {Response} from 'express'
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from "@nestjs/common";
+import { Response } from "express";
 
 /**
  * 全局异常过滤器。
@@ -15,37 +15,37 @@ import {Response} from 'express'
  */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
-    private readonly logger = new Logger('Exception')
+  private readonly logger = new Logger("Exception");
 
-    catch(exception: unknown, host: ArgumentsHost): void {
-        const ctx = host.switchToHttp()
-        const response = ctx.getResponse<Response>()
+  catch(exception: unknown, host: ArgumentsHost): void {
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse<Response>();
 
-        let status = HttpStatus.INTERNAL_SERVER_ERROR
-        let message = '服务器内部错误'
+    let status = HttpStatus.INTERNAL_SERVER_ERROR;
+    let message = "服务器内部错误";
 
-        if (exception instanceof HttpException) {
-            status = exception.getStatus()
-            const payload = exception.getResponse()
+    if (exception instanceof HttpException) {
+      status = exception.getStatus();
+      const payload = exception.getResponse();
 
-            if (typeof payload === 'string') {
-                message = payload
-            } else if (payload && typeof payload === 'object') {
-                const raw = (payload as any).message
-                // class-validator 的错误是数组，拼成一句给人看的话
-                message = Array.isArray(raw) ? raw.join('；') : raw || exception.message
-            }
-        } else if (exception instanceof Error) {
-            // 未预料的异常：日志留真相，前端只看到通用提示
-            this.logger.error(`${exception.message}\n${exception.stack}`)
-        } else {
-            this.logger.error(`未知异常：${String(exception)}`)
-        }
-
-        response.status(status).json({
-            code: status,
-            message,
-            data: null,
-        })
+      if (typeof payload === "string") {
+        message = payload;
+      } else if (payload && typeof payload === "object") {
+        const raw = (payload as any).message;
+        // class-validator 的错误是数组，拼成一句给人看的话
+        message = Array.isArray(raw) ? raw.join("；") : raw || exception.message;
+      }
+    } else if (exception instanceof Error) {
+      // 未预料的异常：日志留真相，前端只看到通用提示
+      this.logger.error(`${exception.message}\n${exception.stack}`);
+    } else {
+      this.logger.error(`未知异常：${String(exception)}`);
     }
+
+    response.status(status).json({
+      code: status,
+      message,
+      data: null,
+    });
+  }
 }

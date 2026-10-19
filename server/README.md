@@ -13,19 +13,20 @@
 
 具体拆开：
 
-| 能力 | 说明 | 关键代码 |
-|---|---|---|
-| 认证与权限 | JWT 登录；权限码校验；超管拥有一切 | `src/auth/` |
-| 多租户隔离 | 所有业务表带 `system_id`；超管可用 `X-System-Code` 切换目标子系统 | `src/auth/system-context.guard.ts` |
-| 子系统管理 | 建/改/删子系统（自动附送一个默认管理员角色） | `src/system/` |
-| 用户/角色 | 子系统内独立的用户与角色，角色=权限码集合 | `src/user/`、`src/role/` |
-| 业务字典 | 下拉选项存库，改选项不用改代码 | `src/dict/` |
-| 路由管理 | CUSTOM（手写页面）和 TABLE（TCID 表格）两种 | `src/route/` |
-| 表格配置（TCID） | 字段即数据库列；生成 TCID；配置入库；`CREATE TABLE` / `ADD COLUMN` / `DROP TABLE` | `src/table-config/` |
-| 动态表格数据 | 按 TCID 分页、搜索、增删改；搜索条件走安全 DSL | `src/table-data/` |
-| pgvector 预留 | 已建 `vector` 扩展和 `sys_vector_document` 表，暂未接 embedding 模型 | `src/vector/`、迁移 SQL |
+| 能力             | 说明                                                                              | 关键代码                           |
+| ---------------- | --------------------------------------------------------------------------------- | ---------------------------------- |
+| 认证与权限       | JWT 登录；权限码校验；超管拥有一切                                                | `src/auth/`                        |
+| 多租户隔离       | 所有业务表带 `system_id`；超管可用 `X-System-Code` 切换目标子系统                 | `src/auth/system-context.guard.ts` |
+| 子系统管理       | 建/改/删子系统（自动附送一个默认管理员角色）                                      | `src/system/`                      |
+| 用户/角色        | 子系统内独立的用户与角色，角色=权限码集合                                         | `src/user/`、`src/role/`           |
+| 业务字典         | 下拉选项存库，改选项不用改代码                                                    | `src/dict/`                        |
+| 路由管理         | CUSTOM（手写页面）和 TABLE（TCID 表格）两种                                       | `src/route/`                       |
+| 表格配置（TCID） | 字段即数据库列；生成 TCID；配置入库；`CREATE TABLE` / `ADD COLUMN` / `DROP TABLE` | `src/table-config/`                |
+| 动态表格数据     | 按 TCID 分页、搜索、增删改；搜索条件走安全 DSL                                    | `src/table-data/`                  |
+| pgvector 预留    | 已建 `vector` 扩展和 `sys_vector_document` 表，暂未接 embedding 模型              | `src/vector/`、迁移 SQL            |
 
 **没有做的事（有意留白）**：
+
 - 没有做「删除字段就 DROP 列」——会丢数据，必须人工确认
 - 没有做「改字段类型」——需要重写整张表，同理
 - 没有做文件上传、消息队列、定时任务——不属于当前需求
@@ -34,16 +35,16 @@
 
 ## 2. 技术栈
 
-| 类别 | 选型 | 版本 | 为什么 |
-|---|---|---|---|
-| 运行时 | Node.js | ≥ 20（开发机实测 24.20） | 与前端构建统一 |
-| 框架 | NestJS | 11 | 模块化、守卫/拦截器生态成熟，适合做权限和统一响应 |
-| ORM | Prisma | 6.x | schema 即文档；迁移可离线生成；`$queryRaw` 参数化做动态表很顺手 |
-| 数据库 | PostgreSQL + pgvector | 16 / pgvector 0.7+ | 用 `biz_<tcid>` 真实物理表；pgvector 为后续语义检索预留 |
-| 认证 | @nestjs/jwt + passport-jwt | — | 无状态 token，方便横向扩容 |
-| 密码 | bcryptjs | — | 纯 JS 实现，避免 Windows 上编译 native 模块 |
-| 文档 | @nestjs/swagger | — | `/api/docs` 自动生成接口文档 |
-| 测试 | jest + ts-jest | 29 | 单元测试不依赖数据库，CI 友好 |
+| 类别   | 选型                       | 版本                     | 为什么                                                          |
+| ------ | -------------------------- | ------------------------ | --------------------------------------------------------------- |
+| 运行时 | Node.js                    | ≥ 20（开发机实测 24.20） | 与前端构建统一                                                  |
+| 框架   | NestJS                     | 11                       | 模块化、守卫/拦截器生态成熟，适合做权限和统一响应               |
+| ORM    | Prisma                     | 6.x                      | schema 即文档；迁移可离线生成；`$queryRaw` 参数化做动态表很顺手 |
+| 数据库 | PostgreSQL + pgvector      | 16 / pgvector 0.7+       | 用 `biz_<tcid>` 真实物理表；pgvector 为后续语义检索预留         |
+| 认证   | @nestjs/jwt + passport-jwt | —                        | 无状态 token，方便横向扩容                                      |
+| 密码   | bcryptjs                   | —                        | 纯 JS 实现，避免 Windows 上编译 native 模块                     |
+| 文档   | @nestjs/swagger            | —                        | `/api/docs` 自动生成接口文档                                    |
+| 测试   | jest + ts-jest             | 29                       | 单元测试不依赖数据库，CI 友好                                   |
 
 ---
 
@@ -95,15 +96,15 @@ server/
 
 配置里的 `fields[]` 每一项都会变成真实列：
 
-| 配置 type | PostgreSQL 列类型 |
-|---|---|
-| string / text | `text` |
-| number | `numeric(18,2)` |
-| integer | `integer` |
-| boolean | `boolean` |
-| date | `date` |
-| datetime | `timestamptz` |
-| json | `jsonb` |
+| 配置 type     | PostgreSQL 列类型 |
+| ------------- | ----------------- |
+| string / text | `text`            |
+| number        | `numeric(18,2)`   |
+| integer       | `integer`         |
+| boolean       | `boolean`         |
+| date          | `date`            |
+| datetime      | `timestamptz`     |
+| json          | `jsonb`           |
 
 固定列（不参与配置）：`id uuid`、`created_at`、`updated_at`。
 
@@ -121,11 +122,15 @@ server/
   "group": {
     "logic": "OR",
     "conditions": [
-      {"field": "status", "op": "in", "value": ["paid", "shipped"]},
-      {"field": "amount", "op": "gt", "value": 1000}
+      { "field": "status", "op": "in", "value": ["paid", "shipped"] },
+      { "field": "amount", "op": "gt", "value": 1000 }
     ],
     "groups": [
-      {"logic": "AND", "not": true, "conditions": [{"field": "customer_name", "op": "like", "value": "测试"}]}
+      {
+        "logic": "AND",
+        "not": true,
+        "conditions": [{ "field": "customer_name", "op": "like", "value": "测试" }]
+      }
     ]
   }
 }
@@ -144,16 +149,16 @@ server/
 
 ## 5. 数据模型
 
-| 表 | 说明 |
-|---|---|
-| `sys_system` | 子系统（租户）。`main` 为主系统 |
-| `sys_user` | 用户，同子系统内用户名唯一 |
-| `sys_role` | 角色，`permissions String[]` 存权限码；超管为 `["*"]` |
-| `sys_dict_type` / `sys_dict_item` | 业务字典与选项 |
-| `sys_route` | 路由/菜单。`type=TABLE` 时带 `tcid`，`CUSTOM` 时带 `component_path` |
-| `sys_table_config` | 表格配置（TCID 说明书）：`fields` / `operations` / `custom_actions` / `search_mode` |
-| `sys_vector_document` | pgvector 预留表（`embedding vector(1024)`） |
-| `biz_<tcid>` | 每张配置表对应的物理表（运行时动态创建） |
+| 表                                | 说明                                                                                |
+| --------------------------------- | ----------------------------------------------------------------------------------- |
+| `sys_system`                      | 子系统（租户）。`main` 为主系统                                                     |
+| `sys_user`                        | 用户，同子系统内用户名唯一                                                          |
+| `sys_role`                        | 角色，`permissions String[]` 存权限码；超管为 `["*"]`                               |
+| `sys_dict_type` / `sys_dict_item` | 业务字典与选项                                                                      |
+| `sys_route`                       | 路由/菜单。`type=TABLE` 时带 `tcid`，`CUSTOM` 时带 `component_path`                 |
+| `sys_table_config`                | 表格配置（TCID 说明书）：`fields` / `operations` / `custom_actions` / `search_mode` |
+| `sys_vector_document`             | pgvector 预留表（`embedding vector(1024)`）                                         |
+| `biz_<tcid>`                      | 每张配置表对应的物理表（运行时动态创建）                                            |
 
 完整字段见 `prisma/schema.prisma`（每张表都写了中文注释）。
 
@@ -165,44 +170,44 @@ server/
 
 ### 认证
 
-| 方法 | 路径 | 说明 | 权限 |
-|---|---|---|---|
-| POST | `/api/auth/login` | 登录，body `{username, password, systemCode?}` | 公开 |
-| GET | `/api/auth/profile` | 当前用户信息 | 登录 |
-| POST | `/api/auth/password` | 修改自己的密码 | 登录 |
+| 方法 | 路径                 | 说明                                           | 权限 |
+| ---- | -------------------- | ---------------------------------------------- | ---- |
+| POST | `/api/auth/login`    | 登录，body `{username, password, systemCode?}` | 公开 |
+| GET  | `/api/auth/profile`  | 当前用户信息                                   | 登录 |
+| POST | `/api/auth/password` | 修改自己的密码                                 | 登录 |
 
 ### 子系统（超管）
 
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/api/systems` | 列表（含用户/路由/表格数量） |
-| POST | `/api/systems` | 新建（自动创建默认 ADMIN 角色） |
-| PATCH | `/api/systems/:id` | 改名/备注/启停（编码不可改） |
+| 方法   | 路径               | 说明                                |
+| ------ | ------------------ | ----------------------------------- |
+| GET    | `/api/systems`     | 列表（含用户/路由/表格数量）        |
+| POST   | `/api/systems`     | 新建（自动创建默认 ADMIN 角色）     |
+| PATCH  | `/api/systems/:id` | 改名/备注/启停（编码不可改）        |
 | DELETE | `/api/systems/:id` | 删除（⚠️ 连带删配置 + DROP 物理表） |
 
 ### 路由 / 用户 / 角色 / 字典
 
-| 方法 | 路径 | 权限 |
-|---|---|---|
-| GET | `/api/routes` | `route:read` |
-| GET | `/api/routes/my` | 登录即可（返回当前用户可见菜单） |
-| POST/PATCH/DELETE | `/api/routes[/:id]` | `route:create/update/delete` |
-| GET | `/api/users?page=&pageSize=&keyword=` | `user:read` |
-| POST/PATCH/DELETE | `/api/users[/:id]` | `user:create/update/delete` |
-| GET | `/api/roles`、`GET /api/roles/permissions` | `role:read` |
-| POST/PATCH/DELETE | `/api/roles[/:id]` | `role:create/update/delete` |
-| GET | `/api/dict/types`、`/api/dict/types/:id/items`、`/api/dict/by-code/:code` | `dict:read`（by-code 登录即可） |
-| POST/PATCH/DELETE | `/api/dict/types...`、`/api/dict/items...` | `dict:manage` |
+| 方法              | 路径                                                                      | 权限                             |
+| ----------------- | ------------------------------------------------------------------------- | -------------------------------- |
+| GET               | `/api/routes`                                                             | `route:read`                     |
+| GET               | `/api/routes/my`                                                          | 登录即可（返回当前用户可见菜单） |
+| POST/PATCH/DELETE | `/api/routes[/:id]`                                                       | `route:create/update/delete`     |
+| GET               | `/api/users?page=&pageSize=&keyword=`                                     | `user:read`                      |
+| POST/PATCH/DELETE | `/api/users[/:id]`                                                        | `user:create/update/delete`      |
+| GET               | `/api/roles`、`GET /api/roles/permissions`                                | `role:read`                      |
+| POST/PATCH/DELETE | `/api/roles[/:id]`                                                        | `role:create/update/delete`      |
+| GET               | `/api/dict/types`、`/api/dict/types/:id/items`、`/api/dict/by-code/:code` | `dict:read`（by-code 登录即可）  |
+| POST/PATCH/DELETE | `/api/dict/types...`、`/api/dict/items...`                                | `dict:manage`                    |
 
 ### 表格配置（TCID）
 
-| 方法 | 路径 | 说明 | 权限 |
-|---|---|---|---|
-| GET | `/api/table-configs?keyword=` | 列表 | `table:read` |
-| GET | `/api/table-configs/:tcid` | 配置详情 | `table:read` |
-| POST | `/api/table-configs` | 新建：生成 TCID + 建物理表 + 配置入库 | `table:create` |
-| PUT | `/api/table-configs/:tcid` | 修改（加字段会 ADD COLUMN） | `table:update` |
-| DELETE | `/api/table-configs/:tcid` | 删除（⚠️ DROP 物理表） | `table:delete` |
+| 方法   | 路径                          | 说明                                  | 权限           |
+| ------ | ----------------------------- | ------------------------------------- | -------------- |
+| GET    | `/api/table-configs?keyword=` | 列表                                  | `table:read`   |
+| GET    | `/api/table-configs/:tcid`    | 配置详情                              | `table:read`   |
+| POST   | `/api/table-configs`          | 新建：生成 TCID + 建物理表 + 配置入库 | `table:create` |
+| PUT    | `/api/table-configs/:tcid`    | 修改（加字段会 ADD COLUMN）           | `table:update` |
+| DELETE | `/api/table-configs/:tcid`    | 删除（⚠️ DROP 物理表）                | `table:delete` |
 
 新建请求体示例：
 
@@ -212,33 +217,61 @@ server/
   "searchMode": "AND",
   "pageSize": 20,
   "fields": [
-    {"name": "order_no", "label": "订单号", "type": "string", "visible": true, "searchable": true, "searchOp": "like", "required": true},
-    {"name": "amount", "label": "金额", "type": "number", "visible": true, "searchable": true, "searchOp": "between"},
-    {"name": "status", "label": "状态", "type": "string", "visible": true, "searchable": true, "searchOp": "eq", "options": {"dict": "order_status"}}
+    {
+      "name": "order_no",
+      "label": "订单号",
+      "type": "string",
+      "visible": true,
+      "searchable": true,
+      "searchOp": "like",
+      "required": true
+    },
+    {
+      "name": "amount",
+      "label": "金额",
+      "type": "number",
+      "visible": true,
+      "searchable": true,
+      "searchOp": "between"
+    },
+    {
+      "name": "status",
+      "label": "状态",
+      "type": "string",
+      "visible": true,
+      "searchable": true,
+      "searchOp": "eq",
+      "options": { "dict": "order_status" }
+    }
   ],
-  "operations": {"create": true, "update": true, "delete": true, "createPermission": "data:create"},
-  "customActions": [{"label": "标记发货", "value": "ship", "permission": "data:update"}]
+  "operations": {
+    "create": true,
+    "update": true,
+    "delete": true,
+    "createPermission": "data:create"
+  },
+  "customActions": [{ "label": "标记发货", "value": "ship", "permission": "data:update" }]
 }
 ```
 
 ### 动态表格数据（<Table> 组件用的就是这几个）
 
-| 方法 | 路径 | 说明 | 权限 |
-|---|---|---|---|
-| GET | `/api/table/:tcid/config` | 渲染配置（列、搜索项、按钮、当前用户可做的操作） | `data:read` |
-| GET | `/api/table/:tcid/data?page=&pageSize=&filters=` | 分页 + 搜索，`filters` 是 JSON 字符串 | `data:read` |
-| POST | `/api/table/:tcid/data` | 新增 | 表格配置里的 createPermission（默认 `data:create`） |
-| PATCH | `/api/table/:tcid/data/:id` | 修改 | 同上 updatePermission |
-| DELETE | `/api/table/:tcid/data/:id` | 删除 | 同上 deletePermission |
+| 方法   | 路径                                             | 说明                                             | 权限                                                |
+| ------ | ------------------------------------------------ | ------------------------------------------------ | --------------------------------------------------- |
+| GET    | `/api/table/:tcid/config`                        | 渲染配置（列、搜索项、按钮、当前用户可做的操作） | `data:read`                                         |
+| GET    | `/api/table/:tcid/data?page=&pageSize=&filters=` | 分页 + 搜索，`filters` 是 JSON 字符串            | `data:read`                                         |
+| POST   | `/api/table/:tcid/data`                          | 新增                                             | 表格配置里的 createPermission（默认 `data:create`） |
+| PATCH  | `/api/table/:tcid/data/:id`                      | 修改                                             | 同上 updatePermission                               |
+| DELETE | `/api/table/:tcid/data/:id`                      | 删除                                             | 同上 deletePermission                               |
 
 > 注意：这三个写接口的权限是「双层」的——先看表格配置里该操作是否开启，再看用户有没有配置里指定的权限码。
 
 ### 其它
 
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/api/health` | 健康检查（含数据库、pgvector 状态），公开 |
-| GET | `/api/vector/status` | pgvector 版本与文档数（预留能力） |
+| 方法 | 路径                 | 说明                                      |
+| ---- | -------------------- | ----------------------------------------- |
+| GET  | `/api/health`        | 健康检查（含数据库、pgvector 状态），公开 |
+| GET  | `/api/vector/status` | pgvector 版本与文档数（预留能力）         |
 
 ---
 
@@ -312,6 +345,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-test.ps1 `
 ```
 
 > ⚠️ **两个 Windows 上的坑**（脚本里已经处理好，改脚本时注意别破坏）：
+>
 > 1. **文件必须存成 UTF-8 with BOM**。Windows PowerShell 5.1 会把无 BOM 的 UTF-8 当 GBK 读，
 >    脚本里的中文会让解析器直接崩（报"意外的标记 }"之类看不懂的错）。
 > 2. **不要用参数 splatting 调 `Invoke-WebRequest`**（`$p=@{...}; Invoke-WebRequest @p`）。
@@ -321,17 +355,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-test.ps1 `
 
 ### 7.5 npm scripts 速查
 
-| 命令 | 作用 |
-|---|---|
-| `npm run build` | `prisma generate` + `nest build`，产物在 `dist/` |
-| `npm run start:dev` | 开发模式（watch） |
-| `npm run start:prod` | 跑 `dist/main.js` |
-| `npm run prisma:generate` | 只生成 Prisma Client |
-| `npm run prisma:validate` | 校验 schema（不需要连库） |
-| `npm run prisma:migrate:deploy` | 执行 `prisma/migrations` 里的迁移 |
-| `npm run prisma:migrate:diff` | 从 schema 重新生成迁移 SQL（离线，不连库） |
-| `npm run seed` | 初始化种子数据（可重复执行） |
-| `npm test` | 单元测试 |
+| 命令                            | 作用                                             |
+| ------------------------------- | ------------------------------------------------ |
+| `npm run build`                 | `prisma generate` + `nest build`，产物在 `dist/` |
+| `npm run start:dev`             | 开发模式（watch）                                |
+| `npm run start:prod`            | 跑 `dist/main.js`                                |
+| `npm run prisma:generate`       | 只生成 Prisma Client                             |
+| `npm run prisma:validate`       | 校验 schema（不需要连库）                        |
+| `npm run prisma:migrate:deploy` | 执行 `prisma/migrations` 里的迁移                |
+| `npm run prisma:migrate:diff`   | 从 schema 重新生成迁移 SQL（离线，不连库）       |
+| `npm run seed`                  | 初始化种子数据（可重复执行）                     |
+| `npm test`                      | 单元测试                                         |
 
 ---
 
@@ -354,7 +388,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-test.ps1 `
    - 加字段：`ADD COLUMN`，列可空，不影响老数据
    - 删字段：只从配置移除，物理列保留
    - 改类型：直接拒绝（提示新建字段）
-   这三条是安全底线，不要为了"方便"去改。
+     这三条是安全底线，不要为了"方便"去改。
 
 5. **标识符校验不能放宽**
    `src/common/identifiers.ts` 是全系统唯一把用户输入拼进 SQL 文本的地方。
@@ -397,3 +431,18 @@ A：jest 默认用子进程跑并发 worker，某些受限终端/沙箱不允许
 
 **Q：接口返回 401「登录状态已失效」**
 A：token 过期（默认 8 小时）或 `JWT_SECRET` 变了。重新登录即可。
+
+---
+
+## 10. 代码格式化
+
+缩进 **2 空格**，其余风格由 Prettier 决定，不要手写缩进。
+
+```bash
+cd ..            # 回到仓库根目录
+npm install      # 只需一次，装根目录的开发期 Prettier
+npm run format   # 格式化整个仓库
+```
+
+编辑器里开了 formatOnSave 的话，Ctrl+S 就是同一套规则，不会二次重排。
+`prisma/schema.prisma` 和 `*.sql` 不在格式化范围内（Prettier 没有对应解析器）。

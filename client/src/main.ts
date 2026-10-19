@@ -1,13 +1,13 @@
-import {createApp} from 'vue'
-import ElementPlus from 'element-plus'
-import 'element-plus/dist/index.css'
-import zhCn from 'element-plus/es/locale/lang/zh-cn'
-import * as ElementPlusIconsVue from '@element-plus/icons-vue'
-import {createPinia} from 'pinia'
-import App from './App.vue'
-import router, {markDynamicRoutesReady, setupDynamicRoutes} from './router'
-import {TOKEN_KEY} from './api/request'
-import './styles/index.css'
+import { createApp } from "vue";
+import ElementPlus from "element-plus";
+import "element-plus/dist/index.css";
+import zhCn from "element-plus/es/locale/lang/zh-cn";
+import * as ElementPlusIconsVue from "@element-plus/icons-vue";
+import { createPinia } from "pinia";
+import App from "./App.vue";
+import router, { markDynamicRoutesReady, setupDynamicRoutes } from "./router";
+import { TOKEN_KEY } from "./api/request";
+import "./styles/index.css";
 
 /**
  * 前端启动入口。
@@ -25,29 +25,29 @@ import './styles/index.css'
  *   但那需要改构建配置，不是当前阶段的事。
  */
 async function bootstrap(): Promise<void> {
-    const app = createApp(App)
+  const app = createApp(App);
 
-    app.use(createPinia())
-    app.use(router)
-    app.use(ElementPlus, {locale: zhCn})
+  app.use(createPinia());
+  app.use(router);
+  app.use(ElementPlus, { locale: zhCn });
 
-    // 把所有图标注册成全局组件，模板里可以写 <el-icon><List /></el-icon>
-    for (const [name, component] of Object.entries(ElementPlusIconsVue)) {
-        app.component(name, component)
+  // 把所有图标注册成全局组件，模板里可以写 <el-icon><List /></el-icon>
+  for (const [name, component] of Object.entries(ElementPlusIconsVue)) {
+    app.component(name, component);
+  }
+
+  // 带 token 刷新页面：提前把动态路由装上
+  if (localStorage.getItem(TOKEN_KEY)) {
+    try {
+      await setupDynamicRoutes(router);
+      markDynamicRoutesReady();
+    } catch {
+      // 拉菜单失败不阻塞启动，路由守卫后面还会再试一次
     }
+  }
 
-    // 带 token 刷新页面：提前把动态路由装上
-    if (localStorage.getItem(TOKEN_KEY)) {
-        try {
-            await setupDynamicRoutes(router)
-            markDynamicRoutesReady()
-        } catch {
-            // 拉菜单失败不阻塞启动，路由守卫后面还会再试一次
-        }
-    }
-
-    await router.isReady()
-    app.mount('#app')
+  await router.isReady();
+  app.mount("#app");
 }
 
-bootstrap()
+bootstrap();

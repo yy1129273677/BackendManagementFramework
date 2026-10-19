@@ -1,11 +1,10 @@
-import {Module} from '@nestjs/common'
-import {DictController} from './dict.controller'
-import {DictService} from './dict.service'
+import { Module } from "@nestjs/common";
+import { DictController } from "./dict.controller";
+import { DictService } from "./dict.service";
 
 @Module({
-    controllers: [DictController],
-    providers: [DictService],
-    exports: [DictService],
+  controllers: [DictController],
+  providers: [DictService],
+  exports: [DictService],
 })
-export class DictModule {
-}
+export class DictModule {}

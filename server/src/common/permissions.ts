@@ -1,4 +1,4 @@
-import {WILDCARD_PERMISSION} from './constants'
+import { WILDCARD_PERMISSION } from "./constants";
 
 /**
  * 判断一个用户是否具备某个权限码。
@@ -18,25 +18,17 @@ import {WILDCARD_PERMISSION} from './constants'
  * 注意：
  *   超管不需要显式配置权限；即使数组为空也返回 true。
  */
-export function hasPermission(
-    permissions: string[] | undefined,
-    isSuper: boolean,
-    required: string,
-): boolean {
-    if (isSuper) return true
-    if (!required) return true
-    const list = permissions || []
-    return list.includes(WILDCARD_PERMISSION) || list.includes(required)
+export function hasPermission(permissions: string[] | undefined, isSuper: boolean, required: string): boolean {
+  if (isSuper) return true;
+  if (!required) return true;
+  const list = permissions || [];
+  return list.includes(WILDCARD_PERMISSION) || list.includes(required);
 }
 
 /**
  * 判断是否同时具备多个权限（全部具备才算有）。
  */
-export function hasAllPermissions(
-    permissions: string[] | undefined,
-    isSuper: boolean,
-    required: string[],
-): boolean {
-    if (!required || required.length === 0) return true
-    return required.every((item) => hasPermission(permissions, isSuper, item))
+export function hasAllPermissions(permissions: string[] | undefined, isSuper: boolean, required: string[]): boolean {
+  if (!required || required.length === 0) return true;
+  return required.every((item) => hasPermission(permissions, isSuper, item));
 }

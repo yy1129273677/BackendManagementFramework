@@ -5,20 +5,20 @@
  */
 
 export class LoginDto {
-    /** 用户名 */
-    username: string
+  /** 用户名 */
+  username: string;
 
-    /** 密码（明文，只在 HTTPS/内网传输，服务端立刻 bcrypt 比对，不落库） */
-    password: string
+  /** 密码（明文，只在 HTTPS/内网传输，服务端立刻 bcrypt 比对，不落库） */
+  password: string;
 
-    /**
-     * 系统编码。留空 = 登录主系统（超管）；
-     * 填 "demo" = 登录 demo 子系统的普通用户。
-     */
-    systemCode?: string
+  /**
+   * 系统编码。留空 = 登录主系统（超管）；
+   * 填 "demo" = 登录 demo 子系统的普通用户。
+   */
+  systemCode?: string;
 }
 
 export class ChangePasswordDto {
-    oldPassword: string
-    newPassword: string
+  oldPassword: string;
+  newPassword: string;
 }

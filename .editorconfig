@@ -1,0 +1,16 @@
+# editorconfig.org
+# 让所有编辑器（Trae / VSCode / IDEA / WebStorm）都用同一套基础格式，
+# 这样"格式化"不会因为换编辑器就把整个文件重排一遍。
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+# 中文文档里行尾两个空格是 Markdown 的"换行"语法，不能被删
+trim_trailing_whitespace = false

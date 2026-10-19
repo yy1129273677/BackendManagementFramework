@@ -1,4 +1,4 @@
-import {randomInt} from 'node:crypto'
+import { randomInt } from "node:crypto";
 
 /**
  * TCID 生成器。
@@ -22,16 +22,16 @@ import {randomInt} from 'node:crypto'
  *   字母 O/I 就不会有歧义了，所以可以保留——这样人工可读的
  *   TCID（比如演示用的 TDEMOORDERS）也能合法。
  */
-export const TCID_ALPHABET = '23456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+export const TCID_ALPHABET = "23456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 /** TCID 固定前缀 */
-export const TCID_PREFIX = 'T'
+export const TCID_PREFIX = "T";
 
 /** 随机部分长度 */
-export const TCID_RANDOM_LENGTH = 10
+export const TCID_RANDOM_LENGTH = 10;
 
 /** TCID 总长度 */
-export const TCID_LENGTH = TCID_PREFIX.length + TCID_RANDOM_LENGTH
+export const TCID_LENGTH = TCID_PREFIX.length + TCID_RANDOM_LENGTH;
 
 /**
  * 生成一个新的 TCID。
@@ -43,11 +43,11 @@ export const TCID_LENGTH = TCID_PREFIX.length + TCID_RANDOM_LENGTH
  *   理论上 32^10 种组合，实际撞车概率可以忽略；调用方仍然要处理唯一冲突（重试）。
  */
 export function generateTcid(): string {
-    let random = ''
-    for (let i = 0; i < TCID_RANDOM_LENGTH; i += 1) {
-        random += TCID_ALPHABET[randomInt(0, TCID_ALPHABET.length)]
-    }
-    return `${TCID_PREFIX}${random}`
+  let random = "";
+  for (let i = 0; i < TCID_RANDOM_LENGTH; i += 1) {
+    random += TCID_ALPHABET[randomInt(0, TCID_ALPHABET.length)];
+  }
+  return `${TCID_PREFIX}${random}`;
 }
 
 /**
@@ -58,10 +58,10 @@ export function generateTcid(): string {
  *   注意：格式合法不代表这个 TCID 真的存在，存在性要查数据库。
  */
 export function isValidTcid(tcid: string): boolean {
-    if (typeof tcid !== 'string' || tcid.length !== TCID_LENGTH) return false
-    if (!tcid.startsWith(TCID_PREFIX)) return false
-    for (const char of tcid.slice(TCID_PREFIX.length)) {
-        if (!TCID_ALPHABET.includes(char)) return false
-    }
-    return true
+  if (typeof tcid !== "string" || tcid.length !== TCID_LENGTH) return false;
+  if (!tcid.startsWith(TCID_PREFIX)) return false;
+  for (const char of tcid.slice(TCID_PREFIX.length)) {
+    if (!TCID_ALPHABET.includes(char)) return false;
+  }
+  return true;
 }

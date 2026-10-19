@@ -1,6 +1,6 @@
-import {defineConfig} from 'vite'
-import vue from '@vitejs/plugin-vue'
-import {fileURLToPath, URL} from 'node:url'
+import { defineConfig } from "vite";
+import vue from "@vitejs/plugin-vue";
+import { fileURLToPath, URL } from "node:url";
 
 /**
  * Vite 配置。
@@ -16,25 +16,25 @@ import {fileURLToPath, URL} from 'node:url'
  *   - 后端端口不是 3000 时，改下面的 target，或设置环境变量 VITE_PROXY_TARGET
  */
 export default defineConfig({
-    plugins: [vue()],
-    resolve: {
-        alias: {
-            '@': fileURLToPath(new URL('./src', import.meta.url)),
-        },
+  plugins: [vue()],
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
-    server: {
-        port: 5173,
-        host: '0.0.0.0',
-        proxy: {
-            '/api': {
-                target: process.env.VITE_PROXY_TARGET || 'http://127.0.0.1:3000',
-                changeOrigin: true,
-            },
-        },
+  },
+  server: {
+    port: 5173,
+    host: "0.0.0.0",
+    proxy: {
+      "/api": {
+        target: process.env.VITE_PROXY_TARGET || "http://127.0.0.1:3000",
+        changeOrigin: true,
+      },
     },
-    build: {
-        outDir: 'dist',
-        // 关掉 sourcemap 让产物更小；排查线上问题时可临时改成 true
-        sourcemap: false,
-    },
-})
+  },
+  build: {
+    outDir: "dist",
+    // 关掉 sourcemap 让产物更小；排查线上问题时可临时改成 true
+    sourcemap: false,
+  },
+});

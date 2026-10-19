@@ -6,8 +6,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
@@ -19,9 +20,12 @@
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
+    "@types/node": "^22.20.5",
     "@vitejs/plugin-vue": "^5.2.1",
+    "prettier": "^3.9.10",
     "typescript": "^5.7.3",
     "vite": "^5.4.14",
-    "vitest": "^2.1.9"
+    "vitest": "^2.1.9",
+    "vue-tsc": "^2.2.12"
   }
 }

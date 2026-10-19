@@ -5,29 +5,29 @@
 
 ## 怎么读
 
-| 你的角色 | 从这里开始 |
-|---|---|
-| 第一次接触这个项目 | `docs/glossary.md`（术语）→ `docs/design/01-context.md`（要解决什么） |
-| 要部署上线 | 根目录 `DEPLOY.md` |
-| 要改后端 | `server/README.md` → `docs/design/02-domain.md`、`06-failure.md` |
-| 要写前端自定义页面 | `client/README.md` → `client/src/views/examples/demo-table.vue` |
-| 想知道为什么这么设计 | `docs/adr/0001-技术栈与TCID动态表格决策.md` |
-| 想核对需求有没有实现 | `docs/requirements/001-admin-framework.md` |
+| 你的角色             | 从这里开始                                                            |
+| -------------------- | --------------------------------------------------------------------- |
+| 第一次接触这个项目   | `docs/glossary.md`（术语）→ `docs/design/01-context.md`（要解决什么） |
+| 要部署上线           | 根目录 `DEPLOY.md`                                                    |
+| 要改后端             | `server/README.md` → `docs/design/02-domain.md`、`06-failure.md`      |
+| 要写前端自定义页面   | `client/README.md` → `client/src/views/examples/demo-table.vue`       |
+| 想知道为什么这么设计 | `docs/adr/0001-技术栈与TCID动态表格决策.md`                           |
+| 想核对需求有没有实现 | `docs/requirements/001-admin-framework.md`                            |
 
 ## 目录
 
-| 文件 | 内容 |
-|---|---|
-| `glossary.md` | 术语表：主系统 / 子系统 / TCID / 路由 / 字典 … |
-| `requirements/001-admin-framework.md` | 最初的需求原文整理 + 实现对照 |
-| `design/01-context.md` | 背景、目标、非目标、约束、角色 |
-| `design/02-domain.md` | 领域模型（mermaid ER 图）+ 实体与不变式 |
-| `design/03-flows.md` | 关键流程（登录建系统、配表格拿 TCID、前端渲染、CRUD） |
-| `design/04-states.md` | 状态与状态迁移（子系统、表格配置、业务数据） |
-| `design/05-rules.md` | 业务规则决策表（权限矩阵、字段类型映射、搜索模式） |
-| `design/06-failure.md` | 失败模式与应对（DDL 失败、注入、并发、慢查询…） |
+| 文件                                   | 内容                                                      |
+| -------------------------------------- | --------------------------------------------------------- |
+| `glossary.md`                          | 术语表：主系统 / 子系统 / TCID / 路由 / 字典 …            |
+| `requirements/001-admin-framework.md`  | 最初的需求原文整理 + 实现对照                             |
+| `design/01-context.md`                 | 背景、目标、非目标、约束、角色                            |
+| `design/02-domain.md`                  | 领域模型（mermaid ER 图）+ 实体与不变式                   |
+| `design/03-flows.md`                   | 关键流程（登录建系统、配表格拿 TCID、前端渲染、CRUD）     |
+| `design/04-states.md`                  | 状态与状态迁移（子系统、表格配置、业务数据）              |
+| `design/05-rules.md`                   | 业务规则决策表（权限矩阵、字段类型映射、搜索模式）        |
+| `design/06-failure.md`                 | 失败模式与应对（DDL 失败、注入、并发、慢查询…）           |
 | `adr/0001-技术栈与TCID动态表格决策.md` | 架构决策记录：技术栈、物理表 vs JSONB、为什么不开原始 SQL |
-| `diagrams/README.md` | 图放哪、为什么默认写在 markdown 里 |
+| `diagrams/README.md`                   | 图放哪、为什么默认写在 markdown 里                        |
 
 ## 约定
 

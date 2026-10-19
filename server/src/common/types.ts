@@ -10,20 +10,20 @@
  *   这是有意的取舍：每个请求都查数据库会让性能变差，而权限变更不频繁。
  */
 export interface JwtUser {
-    /** 用户 id */
-    sub: string
-    username: string
-    nickname?: string
-    /** 用户所属系统 id（租户 id） */
-    systemId: string
-    /** 用户所属系统编码，比如 main / demo */
-    systemCode: string
-    /** 是否超级管理员 */
-    isSuper: boolean
-    /** 权限码列表，超管为 ['*'] */
-    permissions: string[]
-    /** 角色 id */
-    roleId?: string
+  /** 用户 id */
+  sub: string;
+  username: string;
+  nickname?: string;
+  /** 用户所属系统 id（租户 id） */
+  systemId: string;
+  /** 用户所属系统编码，比如 main / demo */
+  systemCode: string;
+  /** 是否超级管理员 */
+  isSuper: boolean;
+  /** 权限码列表，超管为 ['*'] */
+  permissions: string[];
+  /** 角色 id */
+  roleId?: string;
 }
 
 /**
@@ -32,17 +32,17 @@ export interface JwtUser {
  * 超管可以通过请求头 X-System-Code 切换，普通用户永远等于自己所属系统。
  */
 export interface RequestWithUser {
-    user?: JwtUser
-    systemId?: string
-    systemCode?: string
-    headers: Record<string, any>
-    [key: string]: any
+  user?: JwtUser;
+  systemId?: string;
+  systemCode?: string;
+  headers: Record<string, any>;
+  [key: string]: any;
 }
 
 /** 分页查询返回结构 */
 export interface PageResult<T> {
-    list: T[]
-    total: number
-    page: number
-    pageSize: number
+  list: T[];
+  total: number;
+  page: number;
+  pageSize: number;
 }

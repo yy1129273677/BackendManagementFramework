@@ -54,15 +54,15 @@ cd ~/bmf && git pull && docker compose up -d --build web
 
 ### 什么样的改动需要重建镜像？
 
-| 改了什么 | 要重建镜像吗 | 服务器上执行 |
-|---|---|---|
-| 后端代码 `server/src/**` | ✅ 要 | `docker compose up -d --build server` |
-| 后端 `prisma/schema.prisma`、`prisma/migrations/**` | ✅ 要 | `docker compose up -d --build server`（启动时自动 `migrate deploy`） |
-| 前端代码 `client/src/**` | ✅ 要 | `docker compose up -d --build web` |
-| `client/nginx.conf` | ✅ 要（打进镜像） | `docker compose up -d --build web` |
-| `docker-compose.yml`（端口、环境变量映射） | ❌ 不用 | `docker compose up -d` |
-| 根目录 `.env`（JWT_SECRET、数据库密码、超管账号） | ❌ 不用 | `docker compose up -d --force-recreate server`（环境变量只在创建容器时注入） |
-| `DEPLOY.md`、`README.md` | ❌ 不用 | 什么都不用做 |
+| 改了什么                                            | 要重建镜像吗      | 服务器上执行                                                                 |
+| --------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------- |
+| 后端代码 `server/src/**`                            | ✅ 要             | `docker compose up -d --build server`                                        |
+| 后端 `prisma/schema.prisma`、`prisma/migrations/**` | ✅ 要             | `docker compose up -d --build server`（启动时自动 `migrate deploy`）         |
+| 前端代码 `client/src/**`                            | ✅ 要             | `docker compose up -d --build web`                                           |
+| `client/nginx.conf`                                 | ✅ 要（打进镜像） | `docker compose up -d --build web`                                           |
+| `docker-compose.yml`（端口、环境变量映射）          | ❌ 不用           | `docker compose up -d`                                                       |
+| 根目录 `.env`（JWT_SECRET、数据库密码、超管账号）   | ❌ 不用           | `docker compose up -d --force-recreate server`（环境变量只在创建容器时注入） |
+| `DEPLOY.md`、`README.md`                            | ❌ 不用           | 什么都不用做                                                                 |
 
 > **为什么改代码必须重建？** 源码是在构建镜像时 `COPY` 进去的，不是挂载目录。
 > 只 `restart` 容器，跑的还是镜像里的旧代码。
@@ -84,11 +84,11 @@ cd ~/bmf && git pull && docker compose up -d --build web
                         └── 数据卷 bmf-pgdata（持久化）
 ```
 
-| 容器 | 镜像来源 | 对外端口 | 说明 |
-|---|---|---|---|
-| `bmf-web` | `./client/Dockerfile` | **8090:80** | Vite 构建产物 + Nginx，反代 `/api` |
-| `bmf-server` | `./server/Dockerfile` | 不暴露 | Dockerfile 启动命令会先 `prisma migrate deploy` |
-| `bmf-db` | `pgvector/pgvector:pg16` | `127.0.0.1:5434` | 只绑本机回环，公网访问不到；5434 避免和宿主机已有 PG 撞端口 |
+| 容器         | 镜像来源                 | 对外端口         | 说明                                                        |
+| ------------ | ------------------------ | ---------------- | ----------------------------------------------------------- |
+| `bmf-web`    | `./client/Dockerfile`    | **8090:80**      | Vite 构建产物 + Nginx，反代 `/api`                          |
+| `bmf-server` | `./server/Dockerfile`    | 不暴露           | Dockerfile 启动命令会先 `prisma migrate deploy`             |
+| `bmf-db`     | `pgvector/pgvector:pg16` | `127.0.0.1:5434` | 只绑本机回环，公网访问不到；5434 避免和宿主机已有 PG 撞端口 |
 
 为什么数据库也用 pgvector 镜像：**`sys_vector_document` 表用了 `vector(1024)` 列**，
 普通 `postgres` 镜像里没有这个类型，建表会直接失败。
@@ -97,14 +97,14 @@ cd ~/bmf && git pull && docker compose up -d --build web
 
 ## 1. 买服务器时怎么选
 
-| 选项 | 选什么 | 为什么 |
-|---|---|---|
-| 实例 | 2 vCPU / 4 GiB 起 | 后端 + 数据库 + 构建都在一台机器上，2G 构建镜像时容易 OOM |
-| 镜像 | **Ubuntu 22.04 64 位** | 装 Docker 的资料最多 |
-| 系统盘 | 40G 起 | 镜像 + 数据库 + 日志 |
-| 公网 IP | **分配公网 IPv4** | 不勾就没法从外网访问 |
-| 带宽 | 3M 起 | 后台系统以文字为主，3M 够用 |
-| 内存优化 | **开启 Swap** | 2~4G 内存构建 Node 镜像时的保命项 |
+| 选项     | 选什么                 | 为什么                                                    |
+| -------- | ---------------------- | --------------------------------------------------------- |
+| 实例     | 2 vCPU / 4 GiB 起      | 后端 + 数据库 + 构建都在一台机器上，2G 构建镜像时容易 OOM |
+| 镜像     | **Ubuntu 22.04 64 位** | 装 Docker 的资料最多                                      |
+| 系统盘   | 40G 起                 | 镜像 + 数据库 + 日志                                      |
+| 公网 IP  | **分配公网 IPv4**      | 不勾就没法从外网访问                                      |
+| 带宽     | 3M 起                  | 后台系统以文字为主，3M 够用                               |
+| 内存优化 | **开启 Swap**          | 2~4G 内存构建 Node 镜像时的保命项                         |
 
 ---
 
@@ -156,16 +156,16 @@ JWT_SECRET=$(openssl rand -hex 32)
 
 `.env` 里各项的含义：
 
-| 变量 | 默认 | 说明 |
-|---|---|---|
-| `POSTGRES_USER` | `bmf` | 数据库用户名 |
-| `POSTGRES_PASSWORD` | `bmf_password` | **建议改掉**；只在数据卷第一次创建时生效 |
-| `POSTGRES_DB` | `bmf` | 数据库名 |
-| `JWT_SECRET` | 无（必填） | token 签名密钥，改了所有用户掉线 |
-| `JWT_EXPIRES_IN` | `8h` | 登录有效期 |
-| `CORS_ORIGIN` | `http://localhost:8090` | 同域部署保持默认即可 |
-| `SUPER_ADMIN_USERNAME` | `yy1` | 超管用户名（只在首次 seed 时生效） |
-| `SUPER_ADMIN_PASSWORD` | `yy1129273677` | 超管初始密码，**上线后请立刻改** |
+| 变量                   | 默认                    | 说明                                     |
+| ---------------------- | ----------------------- | ---------------------------------------- |
+| `POSTGRES_USER`        | `bmf`                   | 数据库用户名                             |
+| `POSTGRES_PASSWORD`    | `bmf_password`          | **建议改掉**；只在数据卷第一次创建时生效 |
+| `POSTGRES_DB`          | `bmf`                   | 数据库名                                 |
+| `JWT_SECRET`           | 无（必填）              | token 签名密钥，改了所有用户掉线         |
+| `JWT_EXPIRES_IN`       | `8h`                    | 登录有效期                               |
+| `CORS_ORIGIN`          | `http://localhost:8090` | 同域部署保持默认即可                     |
+| `SUPER_ADMIN_USERNAME` | `yy1`                   | 超管用户名（只在首次 seed 时生效）       |
+| `SUPER_ADMIN_PASSWORD` | `yy1129273677`          | 超管初始密码，**上线后请立刻改**         |
 
 > ⚠️ **`.env` 不进 git**（`.gitignore` 已挡住），每台机器各有一份，不要跟着代码同步。
 
@@ -245,11 +245,11 @@ curl -fsS -X POST http://127.0.0.1:8090/api/auth/login \
 
 ## 6. 端口与防火墙
 
-| 端口 | 用途 | 要不要对公网开放 |
-|---|---|---|
-| 8090 | 前端 + 后端 API（经 Nginx） | ✅ **要** |
-| 3000 | 后端直连 | ❌ 不需要（`docker-compose.yml` 里没暴露） |
-| 5434 | 数据库（宿主机回环） | ❌ **绝对不要** |
+| 端口 | 用途                        | 要不要对公网开放                           |
+| ---- | --------------------------- | ------------------------------------------ |
+| 8090 | 前端 + 后端 API（经 Nginx） | ✅ **要**                                  |
+| 3000 | 后端直连                    | ❌ 不需要（`docker-compose.yml` 里没暴露） |
+| 5434 | 数据库（宿主机回环）        | ❌ **绝对不要**                            |
 
 云厂商的安全组要放行 8090；Ubuntu 自带 ufw 如果开了：
 
@@ -324,6 +324,7 @@ docker compose exec -T db psql -U bmf -d bmf < backup-2025-01-01.sql
 
 6. **访问 502**
    Nginx 活着但后端还没起来（正在跑迁移）或后端崩了：
+
    ```bash
    docker compose ps
    docker compose logs --tail=100 server

@@ -1,5 +1,5 @@
-import {Injectable, Logger, OnModuleDestroy, OnModuleInit} from '@nestjs/common'
-import {PrismaClient} from '@prisma/client'
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { PrismaClient } from "@prisma/client";
 
 /**
  * Prisma 数据库客户端封装。
@@ -14,36 +14,40 @@ import {PrismaClient} from '@prisma/client'
  */
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
-    private readonly logger = new Logger('Prisma')
+  private readonly logger = new Logger("Prisma");
 
-    async onModuleInit(): Promise<void> {
-        try {
-            await this.$connect()
-            this.logger.log('数据库连接成功')
-        } catch (error) {
-            this.logger.error(`数据库连接失败：${(error as Error).message}`)
-        }
+  async onModuleInit(): Promise<void> {
+    try {
+      await this.$connect();
+      this.logger.log("数据库连接成功");
+    } catch (error) {
+      this.logger.error(`数据库连接失败：${(error as Error).message}`);
     }
+  }
 
-    async onModuleDestroy(): Promise<void> {
-        await this.$disconnect()
-    }
+  async onModuleDestroy(): Promise<void> {
+    await this.$disconnect();
+  }
 
-    /**
-     * 检查数据库是否可用 + pgvector 扩展是否装好。
-     * 给 /api/health 用。
-     */
-    async health(): Promise<{ db: boolean; pgvector: boolean; message?: string }> {
-        try {
-            await this.$queryRaw`SELECT 1`
-            const rows = await this.$queryRaw<Array<{ count: bigint }>>`
+  /**
+   * 检查数据库是否可用 + pgvector 扩展是否装好。
+   * 给 /api/health 用。
+   */
+  async health(): Promise<{
+    db: boolean;
+    pgvector: boolean;
+    message?: string;
+  }> {
+    try {
+      await this.$queryRaw`SELECT 1`;
+      const rows = await this.$queryRaw<Array<{ count: bigint }>>`
                 SELECT count(*)::int AS count
                 FROM pg_extension
                 WHERE extname = 'vector'
-            `
-            return {db: true, pgvector: Number(rows[0]?.count || 0) > 0}
-        } catch (error) {
-            return {db: false, pgvector: false, message: (error as Error).message}
-        }
+            `;
+      return { db: true, pgvector: Number(rows[0]?.count || 0) > 0 };
+    } catch (error) {
+      return { db: false, pgvector: false, message: (error as Error).message };
     }
+  }
 }

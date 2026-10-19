@@ -1,3 +1,17 @@
+<template>
+  <div>
+    <el-alert
+      v-if="!tcid"
+      type="warning"
+      show-icon
+      :closable="false"
+      title="这条路由没有绑定 TCID"
+      description="请到「路由管理」里把路由类型设为 TABLE 并选择一个表格配置（TCID）。"
+    />
+    <Table v-else :tcid="tcid" />
+  </div>
+</template>
+
 <script setup lang="ts">
 /**
  * 表格路由的容器页。
@@ -9,25 +23,11 @@
  *   1. 动态路由的 meta.tcid（后台配的路由）
  *   2. 路由参数 :tcid（预览页 /preview/:tcid）
  */
-import {computed} from 'vue'
-import {useRoute} from 'vue-router'
-import Table from '@/components/table/index.vue'
+import { computed } from "vue";
+import { useRoute } from "vue-router";
+import Table from "@/components/table/index.vue";
 
-const route = useRoute()
+const route = useRoute();
 
-const tcid = computed(() => String(route.meta?.tcid || route.params?.tcid || ''))
+const tcid = computed(() => String(route.meta?.tcid || route.params?.tcid || ""));
 </script>
-
-<template>
-    <div>
-        <el-alert
-            v-if="!tcid"
-            type="warning"
-            show-icon
-            :closable="false"
-            title="这条路由没有绑定 TCID"
-            description="请到「路由管理」里把路由类型设为 TABLE 并选择一个表格配置（TCID）。"
-        />
-        <Table v-else :tcid="tcid"/>
-    </div>
-</template>

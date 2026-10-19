@@ -1,20 +1,20 @@
-import {Module} from '@nestjs/common'
-import {ConfigModule} from '@nestjs/config'
-import {APP_GUARD} from '@nestjs/core'
-import {AuthModule} from './auth/auth.module'
-import {JwtAuthGuard} from './auth/jwt-auth.guard'
-import {PermissionsGuard} from './auth/permissions.guard'
-import {SystemContextGuard} from './auth/system-context.guard'
-import {DictModule} from './dict/dict.module'
-import {HealthModule} from './health/health.module'
-import {PrismaModule} from './prisma/prisma.module'
-import {RoleModule} from './role/role.module'
-import {RouteModule} from './route/route.module'
-import {SystemModule} from './system/system.module'
-import {TableConfigModule} from './table-config/table-config.module'
-import {TableDataModule} from './table-data/table-data.module'
-import {UserModule} from './user/user.module'
-import {VectorModule} from './vector/vector.module'
+import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
+import { APP_GUARD } from "@nestjs/core";
+import { AuthModule } from "./auth/auth.module";
+import { JwtAuthGuard } from "./auth/jwt-auth.guard";
+import { PermissionsGuard } from "./auth/permissions.guard";
+import { SystemContextGuard } from "./auth/system-context.guard";
+import { DictModule } from "./dict/dict.module";
+import { HealthModule } from "./health/health.module";
+import { PrismaModule } from "./prisma/prisma.module";
+import { RoleModule } from "./role/role.module";
+import { RouteModule } from "./route/route.module";
+import { SystemModule } from "./system/system.module";
+import { TableConfigModule } from "./table-config/table-config.module";
+import { TableDataModule } from "./table-data/table-data.module";
+import { UserModule } from "./user/user.module";
+import { VectorModule } from "./vector/vector.module";
 
 /**
  * 应用根模块。
@@ -26,28 +26,27 @@ import {VectorModule} from './vector/vector.module'
  * 顺序反了就会出现「拿不到 user 就去判权限」的问题。
  */
 @Module({
-    imports: [
-        ConfigModule.forRoot({
-            isGlobal: true,
-            envFilePath: ['.env'],
-        }),
-        PrismaModule,
-        AuthModule,
-        SystemModule,
-        UserModule,
-        RoleModule,
-        DictModule,
-        RouteModule,
-        TableConfigModule,
-        TableDataModule,
-        VectorModule,
-        HealthModule,
-    ],
-    providers: [
-        {provide: APP_GUARD, useClass: JwtAuthGuard},
-        {provide: APP_GUARD, useClass: SystemContextGuard},
-        {provide: APP_GUARD, useClass: PermissionsGuard},
-    ],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: [".env"],
+    }),
+    PrismaModule,
+    AuthModule,
+    SystemModule,
+    UserModule,
+    RoleModule,
+    DictModule,
+    RouteModule,
+    TableConfigModule,
+    TableDataModule,
+    VectorModule,
+    HealthModule,
+  ],
+  providers: [
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: SystemContextGuard },
+    { provide: APP_GUARD, useClass: PermissionsGuard },
+  ],
 })
-export class AppModule {
-}
+export class AppModule {}

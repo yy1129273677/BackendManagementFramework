@@ -1,0 +1,28 @@
+# 依赖与构建产物
+node_modules/
+dist/
+coverage/
+.npm-cache/
+.tmp/
+
+# npm 自己维护，不参与人工格式化
+package-lock.json
+
+# Prettier 没有解析器 / 内容格式由工具自己定的文件
+*.ps1
+nginx.conf
+*.sql
+*.sh
+.env
+.env.*
+.editorconfig
+.gitattributes
+.gitignore
+schema.prisma
+
+# Docker 相关文件保持原样（见 AGENTS.md）
+Dockerfile
+.dockerignore
+
+# 编辑器目录保持原样
+.vscode/

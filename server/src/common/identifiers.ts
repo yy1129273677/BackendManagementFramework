@@ -14,10 +14,10 @@
  */
 
 /** 标识符最大长度（PostgreSQL 上限是 63，留点余量） */
-const MAX_IDENTIFIER_LENGTH = 48
+const MAX_IDENTIFIER_LENGTH = 48;
 
 /** 标识符必须满足的正则：小写字母开头，只含小写字母、数字、下划线 */
-const IDENTIFIER_PATTERN = /^[a-z][a-z0-9_]{0,47}$/
+const IDENTIFIER_PATTERN = /^[a-z][a-z0-9_]{0,47}$/;
 
 /**
  * 保留字黑名单。
@@ -25,11 +25,38 @@ const IDENTIFIER_PATTERN = /^[a-z][a-z0-9_]{0,47}$/
  * 以及我们自己保留的固定列名（id / created_at / updated_at）。
  */
 const RESERVED_WORDS = new Set([
-    'select', 'insert', 'update', 'delete', 'drop', 'alter', 'create', 'truncate',
-    'table', 'index', 'view', 'schema', 'database', 'grant', 'revoke', 'union',
-    'where', 'from', 'into', 'values', 'set', 'join', 'on', 'and', 'or', 'not',
-    'id', 'created_at', 'updated_at', 'pg_catalog', 'information_schema',
-])
+  "select",
+  "insert",
+  "update",
+  "delete",
+  "drop",
+  "alter",
+  "create",
+  "truncate",
+  "table",
+  "index",
+  "view",
+  "schema",
+  "database",
+  "grant",
+  "revoke",
+  "union",
+  "where",
+  "from",
+  "into",
+  "values",
+  "set",
+  "join",
+  "on",
+  "and",
+  "or",
+  "not",
+  "id",
+  "created_at",
+  "updated_at",
+  "pg_catalog",
+  "information_schema",
+]);
 
 /**
  * 判断一个字符串能不能安全地当作数据库标识符（列名）。
@@ -45,11 +72,11 @@ const RESERVED_WORDS = new Set([
  *   字段名请在前端就规范成小写英文加下划线。
  */
 export function isValidIdentifier(name: string): boolean {
-    if (typeof name !== 'string') return false
-    if (name.length === 0 || name.length > MAX_IDENTIFIER_LENGTH) return false
-    if (!IDENTIFIER_PATTERN.test(name)) return false
-    if (RESERVED_WORDS.has(name)) return false
-    return true
+  if (typeof name !== "string") return false;
+  if (name.length === 0 || name.length > MAX_IDENTIFIER_LENGTH) return false;
+  if (!IDENTIFIER_PATTERN.test(name)) return false;
+  if (RESERVED_WORDS.has(name)) return false;
+  return true;
 }
 
 /**
@@ -65,12 +92,12 @@ export function isValidIdentifier(name: string): boolean {
  *   不合法时抛出带中文说明的 Error，交给上层转成 400
  */
 export function assertIdentifier(name: string): string {
-    if (!isValidIdentifier(name)) {
-        throw new Error(
-            `字段名「${name}」不合法：只能用小写字母开头，包含小写字母、数字、下划线，且不能是数据库关键字（如 id、select、table）`,
-        )
-    }
-    return name
+  if (!isValidIdentifier(name)) {
+    throw new Error(
+      `字段名「${name}」不合法：只能用小写字母开头，包含小写字母、数字、下划线，且不能是数据库关键字（如 id、select、table）`,
+    );
+  }
+  return name;
 }
 
 /**
@@ -85,14 +112,14 @@ export function assertIdentifier(name: string): string {
  *   看起来「像合法标识符但其实是残废表名」的东西。
  */
 export function physicalTableName(tcid: string): string {
-    const raw = String(tcid || '').trim()
-    if (!/^[A-Za-z0-9]{1,32}$/.test(raw)) {
-        throw new Error(`TCID「${tcid}」无法转成合法的数据库表名`)
-    }
+  const raw = String(tcid || "").trim();
+  if (!/^[A-Za-z0-9]{1,32}$/.test(raw)) {
+    throw new Error(`TCID「${tcid}」无法转成合法的数据库表名`);
+  }
 
-    const table = `biz_${raw.toLowerCase()}`
-    if (!isValidIdentifier(table)) {
-        throw new Error(`TCID「${tcid}」无法转成合法的数据库表名`)
-    }
-    return table
+  const table = `biz_${raw.toLowerCase()}`;
+  if (!isValidIdentifier(table)) {
+    throw new Error(`TCID「${tcid}」无法转成合法的数据库表名`);
+  }
+  return table;
 }

@@ -1,0 +1,12 @@
+{
+  "name": "bmf",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "3.7.4"
+  }
+}

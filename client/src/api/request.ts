@@ -1,5 +1,5 @@
-import axios, {AxiosInstance, AxiosRequestConfig} from 'axios'
-import {ElMessage} from 'element-plus'
+import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
+import { ElMessage } from "element-plus";
 
 /**
  * 统一的 HTTP 请求封装。
@@ -18,29 +18,30 @@ import {ElMessage} from 'element-plus'
  */
 
 /** localStorage 的键名，登录、切换子系统时会写入 */
-export const TOKEN_KEY = 'bmf_token'
-export const USER_KEY = 'bmf_user'
-export const SYSTEM_CODE_KEY = 'bmf_system_code'
+export const TOKEN_KEY = "bmf_token";
+export const USER_KEY = "bmf_user";
+export const SYSTEM_CODE_KEY = "bmf_system_code";
 
 const request: AxiosInstance = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE || '/api',
-    timeout: 30000,
-})
+  baseURL: import.meta.env.VITE_API_BASE || "/api",
+  timeout: 30000,
+});
 
 /** 请求拦截：补上 token 和子系统标识 */
 request.interceptors.request.use((config) => {
-    const token = localStorage.getItem(TOKEN_KEY)
-    if (token) {
-        config.headers = config.headers || {}
-        config.headers.Authorization = `Bearer ${token}`
-    }
+  // 用 headers.set() 而不是 config.headers.xxx = yyy：
+  // axios 1.x 的 headers 是 AxiosHeaders 实例，直接赋值在类型上不合法（运行也能跑，但类型检查会红）
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token) {
+    config.headers.set("Authorization", `Bearer ${token}`);
+  }
 
-    const systemCode = localStorage.getItem(SYSTEM_CODE_KEY)
-    if (systemCode && config.headers) {
-        config.headers['X-System-Code'] = systemCode
-    }
-    return config
-})
+  const systemCode = localStorage.getItem(SYSTEM_CODE_KEY);
+  if (systemCode) {
+    config.headers.set("X-System-Code", systemCode);
+  }
+  return config;
+});
 
 /**
  * 响应拦截：拆包装 + 错误处理。
@@ -49,41 +50,44 @@ request.interceptors.request.use((config) => {
  * 这里直接返回 data，业务代码写 const list = await api.xxx() 就行。
  */
 request.interceptors.response.use(
-    (response) => {
-        const body = response.data
-        // 兼容非包装接口（比如以后接文件下载）
-        if (body === undefined || body === null || typeof body !== 'object' || !('code' in body)) {
-            return body
-        }
-        if (body.code === 0) return body.data
+  (response) => {
+    const body = response.data;
+    // 兼容非包装接口（比如以后接文件下载）
+    if (body === undefined || body === null || typeof body !== "object" || !("code" in body)) {
+      return body;
+    }
+    if (body.code === 0) return body.data;
 
-        ElMessage.error(body.message || '请求失败')
-        return Promise.reject(new Error(body.message || '请求失败'))
-    },
-    (error) => {
-        const status = error?.response?.status
-        const message = error?.response?.data?.message || error.message || '网络异常'
+    ElMessage.error(body.message || "请求失败");
+    return Promise.reject(new Error(body.message || "请求失败"));
+  },
+  (error) => {
+    const status = error?.response?.status;
+    const message = error?.response?.data?.message || error.message || "网络异常";
 
-        if (status === 401) {
-            // token 过期或没登录：清掉本地状态，跳回登录页
-            localStorage.removeItem(TOKEN_KEY)
-            localStorage.removeItem(USER_KEY)
-            localStorage.removeItem(SYSTEM_CODE_KEY)
-            ElMessage.error('登录状态已失效，请重新登录')
-            if (!location.hash.includes('/login')) {
-                location.hash = '#/login'
-            }
-            return Promise.reject(error)
-        }
+    if (status === 401) {
+      // token 过期或没登录：清掉本地状态，跳回登录页
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      localStorage.removeItem(SYSTEM_CODE_KEY);
+      ElMessage.error("登录状态已失效，请重新登录");
+      if (!location.hash.includes("/login")) {
+        location.hash = "#/login";
+      }
+      return Promise.reject(error);
+    }
 
-        ElMessage.error(message)
-        return Promise.reject(error)
-    },
-)
+    ElMessage.error(message);
+    return Promise.reject(error);
+  },
+);
 
 /** 带类型提示的简易封装，业务层用这个 */
 export async function http<T = any>(config: AxiosRequestConfig): Promise<T> {
-    return request.request<any, T>(config)
+  // 响应拦截器已经把 { code, message, data } 拆成了 data，
+  // 但 axios 的类型系统仍然认为返回的是 AxiosResponse，所以这里做一次断言。
+  // 断言是安全的：拦截器里非 code===0 的情况已经 reject 了。
+  return (await request.request(config)) as unknown as T;
 }
 
-export default request
+export default request;

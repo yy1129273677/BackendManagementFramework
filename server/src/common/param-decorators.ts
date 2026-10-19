@@ -1,13 +1,13 @@
-import {createParamDecorator, ExecutionContext} from '@nestjs/common'
-import {RequestWithUser} from './types'
+import { createParamDecorator, ExecutionContext } from "@nestjs/common";
+import { RequestWithUser } from "./types";
 
 /**
  * 取当前登录用户：@CurrentUser() user: JwtUser
  */
 export const CurrentUser = createParamDecorator((data: unknown, ctx: ExecutionContext) => {
-    const request = ctx.switchToHttp().getRequest<RequestWithUser>()
-    return request.user
-})
+  const request = ctx.switchToHttp().getRequest<RequestWithUser>();
+  return request.user;
+});
 
 /**
  * 取「本次请求实际操作的子系统 id」。
@@ -17,6 +17,6 @@ export const CurrentUser = createParamDecorator((data: unknown, ctx: ExecutionCo
  *   这时 systemId 不等于 user.systemId。所有业务查询都应该用这个值做数据隔离。
  */
 export const SystemId = createParamDecorator((data: unknown, ctx: ExecutionContext) => {
-    const request = ctx.switchToHttp().getRequest<RequestWithUser>()
-    return request.systemId
-})
+  const request = ctx.switchToHttp().getRequest<RequestWithUser>();
+  return request.systemId;
+});

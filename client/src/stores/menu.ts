@@ -1,5 +1,5 @@
-import {defineStore} from 'pinia'
-import {routeApi} from '@/api'
+import { defineStore } from "pinia";
+import { routeApi } from "@/api";
 
 /**
  * 菜单（动态路由）状态。
@@ -10,43 +10,43 @@ import {routeApi} from '@/api'
  *   两边都需要同一份数据，所以放在 store 里。
  */
 export interface DynamicRouteItem {
-    id: string
-    parentId?: string | null
-    title: string
-    path: string
-    type: 'CUSTOM' | 'TABLE'
-    componentPath?: string | null
-    tcid?: string | null
-    icon?: string | null
-    sort?: number
-    visible?: boolean
-    permissionCode?: string | null
+  id: string;
+  parentId?: string | null;
+  title: string;
+  path: string;
+  type: "CUSTOM" | "TABLE";
+  componentPath?: string | null;
+  tcid?: string | null;
+  icon?: string | null;
+  sort?: number;
+  visible?: boolean;
+  permissionCode?: string | null;
 }
 
-export const useMenuStore = defineStore('menu', {
-    state: () => ({
-        /** 当前子系统里、当前用户能看到的路由 */
-        dynamicRoutes: [] as DynamicRouteItem[],
-        /** 动态路由是否已经加载过（避免每次跳转都请求） */
-        loaded: false,
-    }),
+export const useMenuStore = defineStore("menu", {
+  state: () => ({
+    /** 当前子系统里、当前用户能看到的路由 */
+    dynamicRoutes: [] as DynamicRouteItem[],
+    /** 动态路由是否已经加载过（避免每次跳转都请求） */
+    loaded: false,
+  }),
 
-    getters: {
-        /** 按 sort 排序后的菜单 */
-        sortedRoutes: (state) => [...state.dynamicRoutes].sort((a, b) => (a.sort || 0) - (b.sort || 0)),
+  getters: {
+    /** 按 sort 排序后的菜单 */
+    sortedRoutes: (state) => [...state.dynamicRoutes].sort((a, b) => (a.sort || 0) - (b.sort || 0)),
+  },
+
+  actions: {
+    async load() {
+      const { list } = await routeApi.my();
+      this.dynamicRoutes = list || [];
+      this.loaded = true;
+      return this.dynamicRoutes;
     },
 
-    actions: {
-        async load() {
-            const {list} = await routeApi.my()
-            this.dynamicRoutes = list || []
-            this.loaded = true
-            return this.dynamicRoutes
-        },
-
-        reset() {
-            this.dynamicRoutes = []
-            this.loaded = false
-        },
+    reset() {
+      this.dynamicRoutes = [];
+      this.loaded = false;
     },
-})
+  },
+});

@@ -1,3 +1,7 @@
+<template>
+  <router-view />
+</template>
+
 <script setup lang="ts">
 /**
  * 根组件。
@@ -6,7 +10,3 @@
  * 登录页、后台布局页都是通过路由切换的，所以这里不需要判断登录状态。
  */
 </script>
-
-<template>
-    <router-view/>
-</template>
