@@ -50,6 +50,14 @@ src/components/table/
 | `height`     | string  |      | 固定表格高度（内部滚动），如 `"520px"`；传了它就以它为准，覆盖后台的界面配置  |
 | `minHeight`  | string  |      | 最小高度，数据少/空表时不让表格塌下去，默认 `"320px"`；传了 `height` 时不生效 |
 
+#### 列表里显示字典 label
+
+字段在「表格配置」里选了「字典编码」后，**列表单元格显示字典的 label**，而不是数据库里的机器值
+（如 `status = 'paid'` 显示成「已付款」），和表单下拉框里的文案一致。
+字典里查不到的历史值（字典后来改过）会退回显示原始值，不会变成空白。
+页面用 `#col-<字段名>` 插槽接管这一列时，以插槽的渲染为准。
+实现见 `components/table/index.vue` 的 `cellText()` + `utils.ts` 的 `optionLabelOf()`。
+
 #### 插槽（自定义的关键）
 
 | 插槽名            | 作用域                    | 说明                                               |
@@ -376,6 +384,10 @@ npm run format   # 格式化整个仓库
 | `rules.pattern`   | 校验正则（字符串）    | —                |
 | `rules.message`   | 校验失败提示          | —                |
 | `rules.validator` | 前端注册的校验器名字  | —                |
+
+> 字段顺序：在「表格配置」设计器的字段表里，按住**最左侧的 ☰** 上下拖即可调顺序；
+> 松手后 `listSort / searchSort / formSort` 会按新顺序自动重排，点「保存」时才入库
+> （实现见 `views/base/table-config/index.vue` + `sortablejs`）。
 
 ### 自定义校验器怎么写
 

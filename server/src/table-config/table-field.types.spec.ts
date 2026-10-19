@@ -8,6 +8,7 @@ import {
   normalizeFormSpan,
   normalizeOperations,
   normalizeTableUiConfig,
+  pgParamCast,
   sqlTypeFor,
 } from "./table-field.types";
 
@@ -220,6 +221,22 @@ describe("table-field 字段配置规范化", () => {
 
     it("超过 20KB 直接拒绝", () => {
       expect(() => normalizeTableUiConfig({ table: { height: 700, junk: "x".repeat(21000) } })).toThrow();
+    });
+  });
+
+  describe("pgParamCast 参数类型转换", () => {
+    it("日期 / 日期时间 / JSON 必须显式转换，否则数据库报类型不匹配", () => {
+      expect(pgParamCast("date")).toBe("date");
+      expect(pgParamCast("datetime")).toBe("timestamptz");
+      expect(pgParamCast("json")).toBe("jsonb");
+    });
+
+    it("字符串、数字、布尔等数据库自己能识别，不加多余转换", () => {
+      expect(pgParamCast("string")).toBe("");
+      expect(pgParamCast("text")).toBe("");
+      expect(pgParamCast("number")).toBe("");
+      expect(pgParamCast("integer")).toBe("");
+      expect(pgParamCast("boolean")).toBe("");
     });
   });
 });

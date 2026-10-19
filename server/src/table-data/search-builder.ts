@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { TableField } from "../table-config/table-field.types";
+import { TableField, pgParamCast } from "../table-config/table-field.types";
 
 /**
  * 搜索条件 DSL —— 把前端传来的搜索条件翻译成安全的 SQL WHERE 片段。
@@ -47,6 +47,14 @@ export interface RawSearchPayload {
 export interface ParsedCondition {
   field: string;
   op: string;
+  /**
+   * 这个字段的值在 SQL 里需要补的类型转换（"date" / "timestamptz" / "jsonb"，空字符串表示不用）。
+   *
+   * 为什么要提前算好：日期字段的参数如果不转换，PostgreSQL 会拿它和日期列比较时报
+   *   operator does not exist: date >= text
+   * 接口就会变成 500。转换名来自 pgParamCast 的固定白名单，值仍然是参数绑定。
+   */
+  cast: string;
   /** 实际参与 SQL 的值（已做类型转换） */
   values: any[];
 }
@@ -140,6 +148,9 @@ function parseCondition(raw: RawCondition, fieldMap: Map<string, TableField>): P
     throw new Error(`字段「${field.label || field.name}」未开启搜索`);
   }
 
+  // 这个字段的值拼 SQL 时要不要补 ::date 之类，提前算好（见 pgParamCast 的注释）
+  const cast = pgParamCast(field.type);
+
   const op = String(raw.op || "eq");
   if (!OPS.has(op)) {
     throw new Error(`搜索方式「${op}」不支持`);
@@ -156,7 +167,7 @@ function parseCondition(raw: RawCondition, fieldMap: Map<string, TableField>): P
       if (!TEXT_TYPES.has(field.type)) {
         throw new Error(`字段「${field.label || field.name}」是 ${field.type} 类型，不支持模糊搜索`);
       }
-      return { field: fieldName, op, values: [escapeLike(String(raw.value))] };
+      return { field: fieldName, op, cast, values: [escapeLike(String(raw.value))] };
     }
     case "in":
     case "notIn": {
@@ -169,7 +180,7 @@ function parseCondition(raw: RawCondition, fieldMap: Map<string, TableField>): P
         .filter((item) => item !== "" && item !== undefined && item !== null)
         .map((item) => coerceValue(field, item));
       if (values.length === 0) return null;
-      return { field: fieldName, op, values };
+      return { field: fieldName, op, cast, values };
     }
     case "between": {
       if (!RANGE_TYPES.has(field.type)) {
@@ -185,14 +196,15 @@ function parseCondition(raw: RawCondition, fieldMap: Map<string, TableField>): P
       return {
         field: fieldName,
         op,
+        cast,
         values: [coerceValue(field, start), coerceValue(field, end)],
       };
     }
     case "isNull":
     case "notNull":
-      return { field: fieldName, op, values: [] };
+      return { field: fieldName, op, cast, values: [] };
     default:
-      return { field: fieldName, op, values: [coerceValue(field, raw.value)] };
+      return { field: fieldName, op, cast, values: [coerceValue(field, raw.value)] };
   }
 }
 
@@ -258,6 +270,30 @@ export function parseSearchPayload(
   return parseGroup({ logic, conditions: payload.conditions }, fieldMap, logic);
 }
 
+/**
+ * 把一个搜索值变成 SQL 参数片段。
+ *
+ * 干什么：
+ *   值放进参数位（$1），并在需要时补上类型转换，比如日期字段变成 $1::date。
+ *
+ * 为什么日期要转换：
+ *   Prisma 把 JS 字符串按 text 类型发给数据库，PostgreSQL 不会自动把它
+ *   转成日期，直接比较就会报「operator does not exist: date >= text」，接口 500。
+ *   转换名来自 pgParamCast 的固定白名单，值本身依然是参数，不拼字符串。
+ */
+function paramSql(condition: ParsedCondition, value: any): Prisma.Sql {
+  switch (condition.cast) {
+    case "date":
+      return Prisma.sql`${value}::date`;
+    case "timestamptz":
+      return Prisma.sql`${value}::timestamptz`;
+    case "jsonb":
+      return Prisma.sql`${value}::jsonb`;
+    default:
+      return Prisma.sql`${value}`;
+  }
+}
+
 /** 单条条件 → SQL 片段（值全部参数化） */
 function conditionToSql(condition: ParsedCondition): Prisma.Sql {
   // 字段名在 parse 阶段已经确认来自配置，且配置入库前经过 isValidIdentifier 校验，
@@ -267,27 +303,27 @@ function conditionToSql(condition: ParsedCondition): Prisma.Sql {
 
   switch (condition.op) {
     case "eq":
-      return Prisma.sql`${column} = ${first}`;
+      return Prisma.sql`${column} = ${paramSql(condition, first)}`;
     case "ne":
-      return Prisma.sql`${column} <> ${first}`;
+      return Prisma.sql`${column} <> ${paramSql(condition, first)}`;
     case "like":
-      return Prisma.sql`${column} ILIKE ${`%${first}%`}`;
+      return Prisma.sql`${column} ILIKE ${paramSql(condition, `%${first}%`)}`;
     case "notLike":
-      return Prisma.sql`${column} NOT ILIKE ${`%${first}%`}`;
+      return Prisma.sql`${column} NOT ILIKE ${paramSql(condition, `%${first}%`)}`;
     case "gt":
-      return Prisma.sql`${column} > ${first}`;
+      return Prisma.sql`${column} > ${paramSql(condition, first)}`;
     case "gte":
-      return Prisma.sql`${column} >= ${first}`;
+      return Prisma.sql`${column} >= ${paramSql(condition, first)}`;
     case "lt":
-      return Prisma.sql`${column} < ${first}`;
+      return Prisma.sql`${column} < ${paramSql(condition, first)}`;
     case "lte":
-      return Prisma.sql`${column} <= ${first}`;
+      return Prisma.sql`${column} <= ${paramSql(condition, first)}`;
     case "in":
-      return Prisma.sql`${column} IN (${Prisma.join(condition.values)})`;
+      return Prisma.sql`${column} IN (${Prisma.join(condition.values.map((value) => paramSql(condition, value)))})`;
     case "notIn":
-      return Prisma.sql`${column} NOT IN (${Prisma.join(condition.values)})`;
+      return Prisma.sql`${column} NOT IN (${Prisma.join(condition.values.map((value) => paramSql(condition, value)))})`;
     case "between":
-      return Prisma.sql`${column} BETWEEN ${first} AND ${second}`;
+      return Prisma.sql`${column} BETWEEN ${paramSql(condition, first)} AND ${paramSql(condition, second)}`;
     case "isNull":
       return Prisma.sql`${column} IS NULL`;
     case "notNull":

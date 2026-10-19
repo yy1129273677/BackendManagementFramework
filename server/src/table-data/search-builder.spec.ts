@@ -40,6 +40,13 @@ const fields: TableField[] = [
     searchable: true,
     searchOp: "eq",
   },
+  {
+    name: "paid_time",
+    label: "付款时间",
+    type: "date",
+    searchable: true,
+    searchOp: "between",
+  },
   { name: "secret_note", label: "内部备注", type: "string", searchable: false },
 ];
 
@@ -196,6 +203,25 @@ describe("search-builder 生成 SQL 片段", () => {
     )!;
     const { values } = inspect(toSql(parsed));
     expect(values).toEqual(expect.arrayContaining(["a", "b"]));
+  });
+
+  it("日期字段的参数会补上 ::date，值仍然是参数（否则 PostgreSQL 报 date >= text）", () => {
+    const parsed = parseSearchPayload(
+      { conditions: [{ field: "paid_time", op: "between", value: ["2025-01-01", "2025-12-31"] }] },
+      fields,
+      "AND",
+    )!;
+    expect((parsed.children[0] as any).cast).toBe("date");
+    const { text, values } = inspect(toSql(parsed));
+    expect(text).toContain("::date");
+    expect(text).not.toContain("2025-01-01");
+    expect(values).toEqual(["2025-01-01", "2025-12-31"]);
+  });
+
+  it("文本字段不会平白多出类型转换", () => {
+    const parsed = parseSearchPayload({ conditions: [{ field: "status", op: "eq", value: "paid" }] }, fields, "AND")!;
+    const { text } = inspect(toSql(parsed));
+    expect(text).not.toContain("::");
   });
 
   it("NOT 组会生成 NOT (...) 包裹", () => {

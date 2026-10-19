@@ -7,6 +7,7 @@ import {
   defaultSearchValues,
   formatCellValue,
   isColumnVisible,
+  optionLabelOf,
   pickSearchFields,
   pickVisibleColumns,
   resolveActionSlotName,
@@ -110,6 +111,31 @@ describe("单元格格式化", () => {
     expect(formatCellValue(null, "string")).toBe("");
     expect(formatCellValue(undefined, "number")).toBe("");
     expect(formatCellValue("", "string")).toBe("");
+  });
+});
+
+describe("字典值转 label", () => {
+  const options = [
+    { label: "待处理", value: "pending" },
+    { label: "已付款", value: "paid" },
+  ];
+
+  it("命中字典项时显示 label", () => {
+    expect(optionLabelOf("paid", options)).toBe("已付款");
+  });
+
+  it("数字与字符串值类型不一致也能命中", () => {
+    expect(optionLabelOf(1, [{ label: "启用", value: "1" }])).toBe("启用");
+  });
+
+  it("字典里查不到时返回 null，交给调用方退回原文显示", () => {
+    expect(optionLabelOf("unknown", options)).toBeNull();
+  });
+
+  it("空值返回 null", () => {
+    expect(optionLabelOf(null, options)).toBeNull();
+    expect(optionLabelOf(undefined, options)).toBeNull();
+    expect(optionLabelOf("", options)).toBeNull();
   });
 });
 

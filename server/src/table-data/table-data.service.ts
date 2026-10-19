@@ -5,7 +5,7 @@ import { hasPermission } from "../common/permissions";
 import { JwtUser } from "../common/types";
 import { PrismaService } from "../prisma/prisma.service";
 import { TableConfigService } from "../table-config/table-config.service";
-import { TableField, TableOperations } from "../table-config/table-field.types";
+import { TableField, TableOperations, pgParamCast } from "../table-config/table-field.types";
 import { hasRouteScopedPermission } from "../common/permission-scope";
 import { canReadTable } from "./read-access";
 import { buildWhereClause } from "./search-builder";
@@ -294,13 +294,28 @@ export class TableDataService {
 
   /**
    * 生成一个参数化占位符片段。
-   * jsonb 需要显式 cast，否则 PostgreSQL 不知道该把字符串转成 json 还是 text。
+   *
+   * 干什么：
+   *   把「要写入的值」变成 SQL 里的一个参数（$1、$2…），必要时补上类型转换。
+   *
+   * 为什么有些类型要补 ::date / ::timestamptz / ::jsonb：
+   *   Prisma 参数化时把 JS 字符串当成 text 类型发给数据库，
+   *   PostgreSQL 不会自动把 text 转成日期类型，于是写日期字段会报
+   *     column "paid_time" is of type date but expression is of type text
+   *   结果就是接口 500。补上转换后，数据库才知道「这个参数按日期解释」。
+   *   转换类型来自 pgParamCast 的固定白名单，值本身仍是参数绑定，没有注入面。
    */
   private valueFragment(field: TableField, value: any): Prisma.Sql {
-    if (field.type === "json" && value !== null) {
-      return Prisma.sql`${value}::jsonb`;
+    switch (pgParamCast(field.type)) {
+      case "date":
+        return Prisma.sql`${value}::date`;
+      case "timestamptz":
+        return Prisma.sql`${value}::timestamptz`;
+      case "jsonb":
+        return Prisma.sql`${value}::jsonb`;
+      default:
+        return Prisma.sql`${value}`;
     }
-    return Prisma.sql`${value}`;
   }
 
   /**

@@ -157,6 +157,40 @@ export function sqlTypeFor(type: FieldType): string {
   return SQL_TYPE_MAP[type] || "text";
 }
 
+/**
+ * 字段类型对应的 PostgreSQL 参数转换名（没有值就表示不需要转换）。
+ *
+ * 干什么：
+ *   拼 SQL 的地方拿它来决定要不要给参数补一个 ::xxx。
+ *   比如日期字段拿到的答案是 "date"，SQL 里就写成 `$1::date`。
+ *
+ * 为什么非加不可（这是踩过的坑）：
+ *   Prisma 的 $queryRaw 会把 JS 字符串当成 text 类型发给数据库，
+ *   而 PostgreSQL 不会自动把 text 转成日期类型。
+ *   所以往日期列写值时会直接报错：
+ *     column "paid_time" is of type date but expression is of type text
+ *   按日期做搜索时也一样：
+ *     operator does not exist: date >= text
+ *   ——接口就变成了 500「服务器内部错误」。
+ *
+ * 注意：
+ *   这里的返回值是固定的白名单字符串，只会拼进 SQL 的类型位置；
+ *   真正的数据值仍然走参数绑定（$1），所以不会带来 SQL 注入风险。
+ */
+export function pgParamCast(type: FieldType): string {
+  switch (type) {
+    case "date":
+      return "date";
+    case "datetime":
+      return "timestamptz";
+    case "json":
+      return "jsonb";
+    default:
+      // 字符串、数字、布尔等类型 PostgreSQL 能自己搞定，不需要转换
+      return "";
+  }
+}
+
 /** 判断字符串是不是支持的字段类型 */
 export function isFieldType(value: string): value is FieldType {
   return ALL_FIELD_TYPES.includes(value as FieldType);

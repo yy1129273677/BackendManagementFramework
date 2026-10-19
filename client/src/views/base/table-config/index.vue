@@ -58,6 +58,8 @@
       width="1400px"
       top="3vh"
       :close-on-click-modal="false"
+      @opened="setupFieldDrag"
+      @closed="destroyFieldDrag"
     >
       <el-alert
         v-if="designerMode === 'edit'"
@@ -123,18 +125,28 @@
         <!-- 字段列表 -->
         <el-form-item label="字段配置">
           <div style="width: 100%">
-            <el-table :data="form.fields" border size="small" max-height="340">
-              <el-table-column label="字段名(列名)" width="140" fixed>
+            <!-- 按住最左侧的 ☰ 上下拖可以调字段顺序；
+                 松手后行会真的上下换位，且「列表排序 / 搜索排序 / 表单排序」按新顺序自动重排（见 syncSortByIndex）。
+                 row-key 必须是 _uid 这种稳定标识：用 el-table 默认的行下标当 key，拖拽后会下标与内容错位。 -->
+            <el-table ref="fieldTableRef" :data="form.fields" row-key="_uid" border size="small" max-height="340">
+              <el-table-column label="" width="44" fixed>
+                <template #default>
+                  <el-icon class="field-drag-handle"><Rank /></el-icon>
+                </template>
+              </el-table-column>
+              <!-- 下面这些带 min-width 的列会被 Element Plus 按比例拉宽，把表格右侧的空白吃掉；
+                   全都写死 width 的话表格就只能和列宽之和一样宽，右边会留一条空白 -->
+              <el-table-column label="字段名(列名)" min-width="120" fixed>
                 <template #default="{ row }">
                   <el-input v-model="row.name" size="small" :disabled="row.locked" placeholder="order_no" />
                 </template>
               </el-table-column>
-              <el-table-column label="标签" width="110">
+              <el-table-column label="标签" min-width="84">
                 <template #default="{ row }">
                   <el-input v-model="row.label" size="small" placeholder="订单号" />
                 </template>
               </el-table-column>
-              <el-table-column label="类型" width="110">
+              <el-table-column label="类型" min-width="88">
                 <template #default="{ row }">
                   <el-select v-model="row.type" size="small" :disabled="row.locked">
                     <el-option v-for="item in FIELD_TYPES" :key="item.value" :label="item.label" :value="item.value" />
@@ -151,7 +163,7 @@
                   <el-switch v-model="row.searchable" size="small" />
                 </template>
               </el-table-column>
-              <el-table-column label="搜索方式" width="110">
+              <el-table-column label="搜索方式" min-width="90">
                 <template #default="{ row }">
                   <el-select v-model="row.searchOp" size="small" :disabled="!row.searchable">
                     <el-option v-for="item in SEARCH_OPS" :key="item.value" :label="item.label" :value="item.value" />
@@ -179,8 +191,13 @@
                   <el-input-number v-model="row.searchSort" size="small" :controls="false" style="width: 100%" />
                 </template>
               </el-table-column>
+              <el-table-column label="表单排序" width="80">
+                <template #default="{ row }">
+                  <el-input-number v-model="row.formSort" size="small" :controls="false" style="width: 100%" />
+                </template>
+              </el-table-column>
               <!-- 字典编码改成下拉（数据来自业务字典类型） -->
-              <el-table-column label="字典编码" width="150">
+              <el-table-column label="字典编码" min-width="100">
                 <template #default="{ row }">
                   <el-select v-model="row.dictCode" size="small" clearable filterable placeholder="不用字典">
                     <el-option
@@ -205,7 +222,8 @@
             </el-table>
             <el-button style="margin-top: 8px" size="small" @click="addField">+ 添加字段</el-button>
             <span class="text-muted" style="margin-left: 8px">
-              字段名就是数据库列名：小写字母开头，只能含小写字母、数字、下划线。表单排序/显示/栅格/校验在「表单配置」里设。
+              字段名就是数据库列名：小写字母开头，只能含小写字母、数字、下划线。拖最左侧的 ☰
+              可调顺序，松手后三个排序自动跟着重排；表单排序/显示/栅格/校验在「表单配置」里设。
             </span>
           </div>
         </el-form-item>
@@ -240,17 +258,17 @@
         <el-form-item label="自定义按钮">
           <div style="width: 100%">
             <el-table :data="form.customActions" border size="small">
-              <el-table-column label="按钮文字（label）" width="180">
+              <el-table-column label="按钮文字（label）" min-width="140">
                 <template #default="{ row }">
                   <el-input v-model="row.label" size="small" placeholder="标记发货" />
                 </template>
               </el-table-column>
-              <el-table-column label="标识（value → 插槽 action-<value>）" width="230">
+              <el-table-column label="标识（value → 插槽 action-<value>）" min-width="170">
                 <template #default="{ row }">
                   <el-input v-model="row.value" size="small" placeholder="ship" />
                 </template>
               </el-table-column>
-              <el-table-column label="需要的权限码（可空）" width="200">
+              <el-table-column label="需要的权限码（可空）" min-width="150">
                 <template #default="{ row }">
                   <el-input v-model="row.permission" size="small" placeholder="data:update" />
                 </template>
@@ -401,9 +419,11 @@
  *   ④ 自定义按钮（label 给人看，value 给 slot 用）
  *   ⑤ 界面配置（一段 JSON：表格高度、新增/编辑弹框的长宽）
  */
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
+import { Rank } from "@element-plus/icons-vue";
+import Sortable from "sortablejs";
 import { dictApi, tableConfigApi } from "@/api";
 import { PRESET_PATTERNS, listValidators } from "@/components/table/validators";
 // 界面配置的默认值 / 合并逻辑和 <Table> 组件共用一份，避免两处默认值各写各的
@@ -441,6 +461,15 @@ interface DesignerField {
   patternMessage: string;
   /** 自定义校验器名字（前端 validators.ts 注册） */
   validator: string;
+  /**
+   * 字段行的稳定标识，只给 el-table 的 row-key 用。
+   *
+   * 为什么不给后端：save() 是逐字段挑 key 组 payload 的，这个下划线开头的内部字段不会被提交。
+   * 为什么必须有：el-table 默认用「行下标」当 key，拖拽后下标和行内容会错位，
+   * 表现就是「只看到排序数字变了、行的上下顺序没真正跟着变」。有了稳定 key，Vue 才能按
+   * 「哪一行」去比对，把 DOM 和数组顺序对齐。
+   */
+  _uid: string;
   /** 编辑已有表格时，老字段的列名不允许改（改了等于新增一列，老数据没了） */
   locked?: boolean;
 }
@@ -506,6 +535,11 @@ const saving = ref(false);
 const formConfigVisible = ref(false);
 const formConfigIndex = ref(-1);
 
+/** 字段表的 DOM 引用：拖拽要绑到它的 tbody 上（见 setupFieldDrag） */
+const fieldTableRef = ref<any>(null);
+/** 字段行拖拽实例：打开设计器时创建，关闭时销毁 */
+let fieldSortable: Sortable | null = null;
+
 const resultVisible = ref(false);
 const createdTcid = ref("");
 
@@ -540,8 +574,17 @@ async function load(): Promise<void> {
 }
 
 // ---------------- 设计器 ----------------
+/** 字段行 _uid 的自增种子，保证同一个弹框里每一行都不一样 */
+let fieldUidSeed = 0;
+
+function nextFieldUid(): string {
+  fieldUidSeed += 1;
+  return `field-${fieldUidSeed}`;
+}
+
 function emptyField(index: number): DesignerField {
   return {
+    _uid: nextFieldUid(),
     name: "",
     label: "",
     type: "string",
@@ -633,6 +676,7 @@ async function openEdit(row: any): Promise<void> {
   // 界面配置：库里可能为空（没配过），此时显示内置默认值
   form.configText = configTextOf(detail.config);
   form.fields = (detail.fields || []).map((field: any) => ({
+    _uid: nextFieldUid(),
     name: field.name,
     label: field.label,
     type: field.type,
@@ -671,6 +715,62 @@ async function openEdit(row: any): Promise<void> {
     confirm: Boolean(action.confirm),
   }));
   designerVisible.value = true;
+}
+
+// ---------------- 字段行拖拽排序 ----------------
+/**
+ * 把「当前数组顺序」同步成三个排序字段。
+ *
+ * 干什么：
+ *   数组下标就是最终顺序，于是把这个下标同时写进
+ *   listSort（列表列顺序）、searchSort（搜索栏顺序）、formSort（表单顺序）。
+ *
+ * 为什么不用管 sort：
+ *   save() 已经给每个字段写了 sort = 数组下标，后端 normalizeFields 按 sort 升序入库，
+ *   所以存下来的顺序天然就是拖完的顺序。
+ */
+function syncSortByIndex(): void {
+  form.fields.forEach((field, index) => {
+    field.listSort = index;
+    field.searchSort = index;
+    field.formSort = index;
+  });
+}
+
+/**
+ * 给字段表绑定拖拽（弹框完全打开后调用）。
+ *
+ * 干什么：
+ *   用 sortablejs 把字段表的 tbody 变成可拖拽区域，手柄是每行最左侧的 ☰。
+ *   拖完先把 form.fields 按新位置重排（它是唯一数据源），再同步三个排序字段。
+ *
+ * 为什么绑在 tbody 上：Element Plus 表格有自己的 DOM 结构，拖拽只能作用在行容器 tbody。
+ */
+async function setupFieldDrag(): Promise<void> {
+  // 等表格真正渲染出来，否则 querySelector 拿不到 tbody
+  await nextTick();
+  const tbody = fieldTableRef.value?.$el?.querySelector(".el-table__body-wrapper tbody") as HTMLElement | null;
+  if (!tbody || fieldSortable) return;
+
+  fieldSortable = Sortable.create(tbody, {
+    // 只有按住 ☰ 才能拖：免得在输入框、开关上按下鼠标时误触排序
+    handle: ".field-drag-handle",
+    animation: 150,
+    onEnd: ({ oldIndex, newIndex }) => {
+      if (oldIndex === undefined || newIndex === undefined || oldIndex === newIndex) return;
+      // 按 Sortable 给出的新位置重排数组
+      const [moved] = form.fields.splice(oldIndex, 1);
+      form.fields.splice(newIndex, 0, moved);
+      // 三个排序跟着新顺序走
+      syncSortByIndex();
+    },
+  });
+}
+
+/** 关闭设计器时解绑，避免下次打开时重复绑定 */
+function destroyFieldDrag(): void {
+  fieldSortable?.destroy();
+  fieldSortable = null;
 }
 
 function addField(): void {
@@ -869,12 +969,23 @@ onMounted(async () => {
   await loadDictTypes();
   validatorNames.value = listValidators();
 });
+
+// 离开页面时顺手解绑拖拽，避免实例挂在已经被卸载的 DOM 上
+onBeforeUnmount(() => destroyFieldDrag());
 </script>
 
 <style lang="less" scoped>
+@import "../../../styles/variables.less";
+
 .tcid {
   color: #409eff;
   font-weight: 600;
+}
+
+/* 字段表的拖拽手柄：只有按住这个 ☰ 才能拖动整行（见 setupFieldDrag） */
+.field-drag-handle {
+  cursor: move;
+  color: @text-secondary;
 }
 
 .op-row {

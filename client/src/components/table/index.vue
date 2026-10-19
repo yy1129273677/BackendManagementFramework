@@ -139,7 +139,7 @@
               :column="column"
               :value="row[column.name]"
             />
-            <span v-else>{{ formatCellValue(row[column.name], column.type) }}</span>
+            <span v-else>{{ cellText(row, column) }}</span>
           </template>
         </el-table-column>
 
@@ -315,6 +315,7 @@ import {
   clampPageSize,
   defaultSearchValues,
   formatCellValue,
+  optionLabelOf,
   resolveActionSlotName,
 } from "./utils";
 
@@ -447,6 +448,18 @@ function optionsFor(field: TableField): Array<{ label: string; value: any }> {
     ];
   }
   return [];
+}
+
+/**
+ * 单元格最终显示的文字。
+ *
+ * 配了业务字典 / 静态选项的字段，先把机器值换成 label（如 paid → 已付款），
+ * 跟表单下拉框里看到的文案保持一致；字典里查不到的历史值、或没配选项的字段，
+ * 退回 formatCellValue 的默认格式化（日期截断、布尔转是/否等）。
+ */
+function cellText(row: TableRow, column: TableField): string {
+  const raw = row[column.name];
+  return optionLabelOf(raw, optionsFor(column)) ?? formatCellValue(raw, column.type);
 }
 
 // ---------------- 数据加载 ----------------

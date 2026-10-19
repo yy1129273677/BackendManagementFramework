@@ -65,6 +65,23 @@ export function formatCellValue(value: any, type: FieldType): string {
   return String(value);
 }
 
+/**
+ * 把「配了下拉选项（业务字典 / 静态选项）」的字段值显示成对应的 label。
+ *
+ * 干什么：
+ *   数据库里存的是机器值（如 status = 'paid'），但字段配了字典之后，
+ *   表格单元格里应该显示给人看的文字（如「已付款」），而不是原始值。
+ *
+ * 为什么找不到时返回 null 而不是空字符串：
+ *   库里可能留着字典里已经没有的历史值（字典后来改过），这时要退回原文显示，
+ *   否则单元格会莫名空白，像是数据丢了。
+ */
+export function optionLabelOf(value: any, options: Array<{ label: string; value: any }> | undefined): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  const hit = (options || []).find((option) => String(option.value) === String(value));
+  return hit ? hit.label : null;
+}
+
 /** 搜索项的初始值：区间搜索用数组，其它用空字符串 */
 export function defaultSearchValues(fields: TableField[]): Record<string, any> {
   const values: Record<string, any> = {};
