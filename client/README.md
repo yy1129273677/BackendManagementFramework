@@ -26,9 +26,9 @@
 ### 1.2 子系统页面（运行时从数据库生成）
 
 - 登录后调 `GET /api/routes/my` 拿到当前子系统里"当前用户能看到的菜单"
-- `type=TABLE` → 挂载 `views/runtime/table-page.vue`，内部渲染 `<Table :tcid>`
+- `type=TABLE` → 挂载 `views/business/runtime/table-page.vue`，内部渲染 `<Table :tcid>`
 - `type=CUSTOM` → 按 `componentPath` 从 `src/views` 里找到对应 `.vue` 文件加载
-- 找不到文件时显示 `views/runtime/missing-page.vue`（提示页，不是白屏）
+- 找不到文件时显示 `views/business/runtime/missing-page.vue`（提示页，不是白屏）
 
 ### 1.3 公用表格组件（最重要）
 
@@ -47,7 +47,7 @@ src/components/table/
 | `tcid`       | string  | ✅   | 表格配置编号，决定渲染哪张表                                                  |
 | `pageSize`   | number  |      | 覆盖配置里的每页条数                                                          |
 | `showSearch` | boolean |      | 是否显示搜索栏，默认 true                                                     |
-| `height`     | string  |      | 固定表格高度（内部滚动），长表格建议传，如 `"520px"`                          |
+| `height`     | string  |      | 固定表格高度（内部滚动），如 `"520px"`；传了它就以它为准，覆盖后台的界面配置  |
 | `minHeight`  | string  |      | 最小高度，数据少/空表时不让表格塌下去，默认 `"320px"`；传了 `height` 时不生效 |
 
 #### 插槽（自定义的关键）
@@ -61,6 +61,23 @@ src/components/table/
 > **插槽名必须和配置里的 `value` 完全一致**（大小写敏感）。
 > 配置里按钮 `value = "ship"` → 页面写 `#action-ship`。
 > 名字对不上不会报错，只是按钮会走默认逻辑（弹一个"点击了 xxx"的提示），很难排查，所以务必对齐。
+
+#### 界面配置（表格高度、弹框长宽）
+
+表格多高、新增/编辑弹框多大，默认由「表格配置」页面里的「界面配置」JSON 决定，
+不用改代码。默认值是：
+
+```json
+{
+  "table": { "height": 700 },
+  "form": { "dialog": { "width": 1200, "height": 960 } }
+}
+```
+
+优先级：**组件 prop（`height`）> 后台界面配置 > 内置默认**。
+后台的 `config` 允许为空（老数据都没配过），此时用 `DEFAULT_TABLE_UI_CONFIG`（在 `types.ts`）兜底，
+所以以后加新的外观项不需要迁移历史数据。
+弹框高度还会再和窗口高度取小值（实际是 `min(配置值, 100vh - 40px)`），小屏上不会顶出屏幕。
 
 #### 事件与暴露方法
 
@@ -81,7 +98,7 @@ tableRef.value.getRows()     // 当前页数据
 
 ### 1.4 完整用法示例
 
-`src/views/examples/demo-table.vue` 是可直接参考的模板：
+`src/views/business/examples/demo-table.vue` 是可直接参考的模板：
 
 ```vue
 <script setup lang="ts">
@@ -143,11 +160,14 @@ client/
 │   ├── layout/index.vue             # 左侧菜单 + 顶栏（含超管切换子系统）
 │   ├── router/index.ts              # 静态路由 + 动态路由注册 + 全局守卫
 │   ├── stores/                      # auth / menu
-│   ├── styles/index.css
+│   ├── styles/index.less
 │   └── views/
-│       ├── login/ dashboard/ system/ route/ user/ role/ dict/ table-config/
-│       ├── runtime/                 # table-page.vue（表格路由容器）、missing-page.vue
-│       └── examples/demo-table.vue  # ★ 自定义页面 + 插槽示例
+│       ├── base/                    # 基本路由：代码里写死的静态路由页
+│       │   ├── login/ dashboard/    # 登录、首页
+│       │   └── system/ route/ user/ role/ dict/ table-config/
+│       └── business/                # 业务菜单：数据库配出来的动态路由页
+│           ├── runtime/             # table-page.vue（表格路由容器）、missing-page.vue
+│           └── examples/demo-table.vue  # ★ 自定义页面 + 插槽示例
 ├── nginx.conf                       # 生产用 Nginx 配置（SPA + /api 反代）
 ├── Dockerfile
 ├── vite.config.ts                   # @ 别名、dev proxy（/api → 127.0.0.1:3000）
@@ -320,7 +340,7 @@ npm run format   # 格式化整个仓库
    </style>
    ```
 
-   路径按组件位置调整（`src/views/xxx/` 下是 `../../styles/variables.less`）。
+   路径按组件位置调整（如 `src/views/base/login/index.vue` 深度多一层，是 `../../../styles/variables.less`）。
 
 4. 全局样式只在 `src/styles/index.less` 里加，组件样式不要往外泄漏（`scoped` 记得写）。
 
@@ -328,14 +348,14 @@ npm run format   # 格式化整个仓库
 
 ## 8. 需求 002 新增内容（2026-10-19）
 
-| 功能           | 位置                                        | 怎么用                                                           |
-| -------------- | ------------------------------------------- | ---------------------------------------------------------------- |
-| 图标网格选择器 | `components/IconPicker/index.vue`           | `<IconPicker v-model="form.icon" />`，弹层一行 6 个图标、可搜索  |
-| 权限树（角色） | `views/role/index.vue`                      | 「角色管理 → 编辑 → 权限」勾菜单和表格按钮，保存权限码数组       |
-| 路由 JSON 配置 | `views/route/index.vue` + `router/index.ts` | 路由里填 JSON，CUSTOM 页面通过 `props.routeConfig` 接收          |
-| 顶部页签       | `stores/tabs.ts` + `layout/TagsView.vue`    | 自动记录访问页面，支持切换/关闭/关闭其它/关闭全部                |
-| 字段表单配置   | `views/table-config/index.vue`              | 字段行「表单配置」二级弹框：表单排序/显示/24 栅格/必填/校验      |
-| 表单校验       | `components/table/validators.ts`            | 内置 phone/email/idCard…，也可注册自定义校验器（能拿到整个表单） |
+| 功能           | 位置                                             | 怎么用                                                           |
+| -------------- | ------------------------------------------------ | ---------------------------------------------------------------- |
+| 图标网格选择器 | `components/IconPicker/index.vue`                | `<IconPicker v-model="form.icon" />`，弹层一行 6 个图标、可搜索  |
+| 权限树（角色） | `views/base/role/index.vue`                      | 「角色管理 → 编辑 → 权限」勾菜单和表格按钮，保存权限码数组       |
+| 路由 JSON 配置 | `views/base/route/index.vue` + `router/index.ts` | 路由里填 JSON，CUSTOM 页面通过 `props.routeConfig` 接收          |
+| 顶部页签       | `stores/tabs.ts` + `layout/TagsView.vue`         | 自动记录访问页面，支持切换/关闭/关闭其它/关闭全部                |
+| 字段表单配置   | `views/base/table-config/index.vue`              | 字段行「表单配置」二级弹框：表单排序/显示/24 栅格/必填/校验      |
+| 表单校验       | `components/table/validators.ts`                 | 内置 phone/email/idCard…，也可注册自定义校验器（能拿到整个表单） |
 
 ### 权限树的数据形状
 
@@ -374,7 +394,7 @@ registerValidator("endAfterStart", (value, formModel) => {
 
 ## 9. 首页图表统计（需求 003）
 
-首页 `views/dashboard/index.vue` 是 ECharts 看板，按「当前在哪个系统」自动切换：
+首页 `views/base/dashboard/index.vue` 是 ECharts 看板，按「当前在哪个系统」自动切换：
 
 | 视角   | 什么时候                         | 内容                                                                                                                                             |
 | ------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |

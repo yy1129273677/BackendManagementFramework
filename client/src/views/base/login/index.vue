@@ -112,7 +112,7 @@ function handleEnter(): void {
 </script>
 
 <style lang="less" scoped>
-@import "../../styles/variables.less";
+@import "../../../styles/variables.less";
 .login-page {
   height: 100vh;
   display: flex;

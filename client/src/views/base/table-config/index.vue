@@ -92,6 +92,34 @@
           <el-input v-model="form.remark" placeholder="这张表是干什么的" />
         </el-form-item>
 
+        <!-- 界面配置：一段 JSON，配表格高度和新增/编辑弹框的长宽 -->
+        <el-form-item label="界面配置">
+          <div style="width: 100%">
+            <el-input
+              v-model="form.configText"
+              type="textarea"
+              :rows="7"
+              spellcheck="false"
+              placeholder='例如 {"table":{"height":700},"form":{"dialog":{"width":1200,"height":960}}}'
+            />
+            <div class="config-hint">
+              <span>
+                目前支持
+                <code>table.height</code>
+                （表格高度）、
+                <code>form.dialog.width</code>
+                /
+                <code>form.dialog.height</code>
+                （新增·编辑弹框的宽高），单位都是像素；不写就用默认值。
+              </span>
+              <span>
+                <el-button link type="primary" size="small" @click="formatConfigText">格式化</el-button>
+                <el-button link type="primary" size="small" @click="resetConfigText">恢复默认</el-button>
+              </span>
+            </div>
+          </div>
+        </el-form-item>
+
         <!-- 字段列表 -->
         <el-form-item label="字段配置">
           <div style="width: 100%">
@@ -371,12 +399,15 @@
  *   ② 字段列表（列名=数据库列名、是否显示、是否可搜索、搜索方式、是否必填…）
  *   ③ 操作列（新增/修改/删除的开关 + 各自需要的权限码）
  *   ④ 自定义按钮（label 给人看，value 给 slot 用）
+ *   ⑤ 界面配置（一段 JSON：表格高度、新增/编辑弹框的长宽）
  */
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { dictApi, tableConfigApi } from "@/api";
 import { PRESET_PATTERNS, listValidators } from "@/components/table/validators";
+// 界面配置的默认值 / 合并逻辑和 <Table> 组件共用一份，避免两处默认值各写各的
+import { resolveTableUiConfig } from "@/components/table/types";
 import { useAuthStore } from "@/stores/auth";
 
 const router = useRouter();
@@ -493,6 +524,8 @@ const form = reactive({
     deletePermission: "data:delete",
   },
   customActions: [] as DesignerAction[],
+  /** 界面配置的 JSON 原文（弹框里那个文本域的内容） */
+  configText: "",
 });
 
 // ---------------- 列表 ----------------
@@ -531,6 +564,38 @@ function emptyField(index: number): DesignerField {
   };
 }
 
+/**
+ * 把界面配置转成「带缩进的 JSON 文本」，填进弹框的文本域。
+ *
+ * 干什么：
+ *   后端存的 config 可能为空（表示没配过），也可能只配了一半。
+ *   这里先和内置默认值合并，再格式化成 2 空格缩进的文本，
+ *   超管打开弹框就能看到完整的写法，照着改即可。
+ *
+ * 参数：
+ *   config - 后端返回的 config 原文，可以为空
+ *
+ * 返回：
+ *   多行 JSON 字符串
+ */
+function configTextOf(config: any): string {
+  return JSON.stringify(resolveTableUiConfig(config), null, 2);
+}
+
+/** 「格式化」按钮：把用户写乱的 JSON 重新排版，顺便暴露语法错误 */
+function formatConfigText(): void {
+  try {
+    form.configText = JSON.stringify(JSON.parse(form.configText || "{}"), null, 2);
+  } catch {
+    ElMessage.error("不是合法的 JSON，请检查引号和逗号");
+  }
+}
+
+/** 「恢复默认」按钮：回到内置默认值（表格 700、弹框 1200×960） */
+function resetConfigText(): void {
+  form.configText = configTextOf(null);
+}
+
 function resetForm(): void {
   form.name = "";
   form.remark = "";
@@ -546,6 +611,8 @@ function resetForm(): void {
     deletePermission: "data:delete",
   };
   form.customActions = [];
+  // 新建时预填一份默认界面配置，让超管看到能配哪些东西
+  form.configText = configTextOf(null);
 }
 
 function openCreate(): void {
@@ -563,6 +630,8 @@ async function openEdit(row: any): Promise<void> {
   form.remark = detail.remark || "";
   form.searchMode = detail.searchMode || "AND";
   form.pageSize = detail.pageSize || 20;
+  // 界面配置：库里可能为空（没配过），此时显示内置默认值
+  form.configText = configTextOf(detail.config);
   form.fields = (detail.fields || []).map((field: any) => ({
     name: field.name,
     label: field.label,
@@ -646,11 +715,25 @@ async function save(): Promise<void> {
     }
   }
 
+  // 界面配置是手写的 JSON，先在这里把它解析成对象；
+  // 写错了当场拦住，不要等后端返回 400（更细的校验——字段名对不对、数值范围——在后端做）
+  let uiConfig: any = null;
+  if (form.configText.trim()) {
+    try {
+      uiConfig = JSON.parse(form.configText);
+    } catch {
+      ElMessage.error("界面配置不是合法的 JSON，请检查引号和逗号");
+      return;
+    }
+  }
+
   const payload = {
     name: form.name.trim(),
     remark: form.remark,
     searchMode: form.searchMode,
     pageSize: Number(form.pageSize) || 20,
+    // 文本域清空时传 null，表示「没配过」，前端会用内置默认值
+    config: uiConfig,
     fields: form.fields.map((field, index) => ({
       name: field.name.trim(),
       label: field.label.trim(),
@@ -813,5 +896,17 @@ code {
   background: #f5f7fa;
   padding: 1px 5px;
   border-radius: 3px;
+}
+
+/* 界面配置文本域下面的说明行：左边是能配哪些字段，右边是两个小按钮 */
+.config-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.6;
 }
 </style>

@@ -5,14 +5,14 @@
 
 ## 怎么读
 
-| 你的角色             | 从这里开始                                                            |
-| -------------------- | --------------------------------------------------------------------- |
-| 第一次接触这个项目   | `docs/glossary.md`（术语）→ `docs/design/01-context.md`（要解决什么） |
-| 要部署上线           | 根目录 `DEPLOY.md`                                                    |
-| 要改后端             | `server/README.md` → `docs/design/02-domain.md`、`06-failure.md`      |
-| 要写前端自定义页面   | `client/README.md` → `client/src/views/examples/demo-table.vue`       |
-| 想知道为什么这么设计 | `docs/adr/0001-技术栈与TCID动态表格决策.md`                           |
-| 想核对需求有没有实现 | `docs/requirements/`（001→003，每条需求一份整理版 + 实现对照）        |
+| 你的角色             | 从这里开始                                                               |
+| -------------------- | ------------------------------------------------------------------------ |
+| 第一次接触这个项目   | `docs/glossary.md`（术语）→ `docs/design/01-context.md`（要解决什么）    |
+| 要部署上线           | 根目录 `DEPLOY.md`                                                       |
+| 要改后端             | `server/README.md` → `docs/design/02-domain.md`、`06-failure.md`         |
+| 要写前端自定义页面   | `client/README.md` → `client/src/views/business/examples/demo-table.vue` |
+| 想知道为什么这么设计 | `docs/adr/0001-技术栈与TCID动态表格决策.md`                              |
+| 想核对需求有没有实现 | `docs/requirements/`（001→003，每条需求一份整理版 + 实现对照）           |
 
 ## 目录
 

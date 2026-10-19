@@ -110,15 +110,15 @@
       </div>
 
       <!-- 数据表格 -->
-      <!-- 最小高度：数据少或空表时表格不至于塌成一条，页面高度更稳定；
-           传了 height（固定高度 + 内部滚动）时以 height 为准，不再压 min-height -->
+      <!-- 高度来源（优先级从高到低）：组件 prop height > 后台界面配置 table.height；
+           都没配时不设固定高度，改用下面的 min-height 兜底，空表时表格不至于塌成一条 -->
       <el-table
         v-loading="loading || configLoading"
         :data="rows"
         border
         stripe
-        :height="height || undefined"
-        :style="{ minHeight: height ? undefined : 'var(--bmf-table-min-height)' }"
+        :height="tableHeight"
+        :style="{ minHeight: tableHeight ? undefined : 'var(--bmf-table-min-height)' }"
         row-key="id"
       >
         <el-table-column
@@ -200,11 +200,13 @@
       </div>
     </template>
 
-    <!-- 新增 / 编辑弹窗 -->
+    <!-- 新增 / 编辑弹窗。宽高来自后台界面配置；高度还会再和屏幕高度取小值，见 dialogStyle -->
     <el-dialog
       v-model="dialogVisible"
       :title="dialogMode === 'create' ? `新增 - ${config?.name || ''}` : `编辑 - ${config?.name || ''}`"
-      width="720px"
+      class="bmf-form-dialog"
+      :width="dialogWidth"
+      :style="dialogStyle"
       destroy-on-close
     >
       <!-- 表单支持自定义栅格：字段配置里设置「所占列」（24 栅格制），24=整行、12=一半 -->
@@ -304,6 +306,8 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { dictApi, tableDataApi } from "@/api";
 import type { CustomAction, TableConfig, TableField, TableRow } from "./types";
+// resolveTableUiConfig 是个函数（不是类型），所以单独 import
+import { resolveTableUiConfig } from "./types";
 import { runFieldRules } from "./validators";
 import {
   buildEmptyForm,
@@ -375,6 +379,37 @@ const formFields = computed(() =>
 const operations = computed(() => config.value?.operations || { create: false, update: false, delete: false });
 const customActions = computed(() => config.value?.customActions || []);
 
+/**
+ * 界面配置（表格高度、表单弹框长宽）。
+ * 后台配了就用后台的，没配过（config 为 null）就用组件内置默认值，
+ * 所以组件里读它时永远有值，不用再判空。
+ */
+const uiConfig = computed(() => resolveTableUiConfig(config.value?.config));
+
+/**
+ * 表格高度。
+ * 优先级：prop（页面里手写 <Table height="520px" />）> 后台界面配置 > 不设。
+ * 返回 undefined 表示不设固定高度，此时模板里用 min-height 兜底（空表也不会塌成一条）。
+ */
+const tableHeight = computed<string | undefined>(() => {
+  if (props.height) return props.height;
+  return `${uiConfig.value.table.height}px`;
+});
+
+/** 新增 / 编辑弹框宽度 */
+const dialogWidth = computed(() => `${uiConfig.value.form.dialog.width}px`);
+
+/**
+ * 弹框高度（写成内联样式）。
+ *
+ * 这里用 CSS 的 min() 让「后台配的高度」和「屏幕放得下的高度」取小值：
+ *   配了 960px、但屏幕只有 800px 高时，实际就是 800 - 40 = 760px，不会顶出屏幕。
+ * 40px 是上下各 20px 的留白，和下面样式里弹框的 margin: 20px auto 对应。
+ */
+const dialogStyle = computed(() => ({
+  height: `min(${uiConfig.value.form.dialog.height}px, calc(100vh - 40px))`,
+}));
+
 /** 操作列宽度：按实际会显示几个按钮动态算，避免按钮换行 */
 const operationColumnWidth = computed(() => {
   let width = 24;
@@ -407,8 +442,8 @@ function optionsFor(field: TableField): Array<{ label: string; value: any }> {
   if (dictCode && dictOptions[dictCode]) return dictOptions[dictCode];
   if (field.type === "boolean") {
     return [
-      { label: "是", value: "true" },
-      { label: "否", value: "false" },
+      { label: "是", value: true },
+      { label: "否", value: false },
     ];
   }
   return [];
@@ -646,6 +681,24 @@ defineExpose({
 
 .bmf-table :deep(.el-table__empty-block) {
   min-height: calc(var(--bmf-table-min-height, 320px) - 48px);
+}
+
+/* 新增/编辑弹框：配了固定高度以后，让中间的输入区自己滚动，标题和底部按钮始终可见。
+   el-dialog 默认是「内容多高就多高」，只设 height 会让内容溢出去盖住边框。
+   这里把它排成竖着的 flex，再让 body 占满剩余高度并在超出时滚动。 */
+.bmf-table :deep(.bmf-form-dialog) {
+  display: flex;
+  flex-direction: column;
+  /* Element Plus 默认上边距是 15vh，配了固定高度后会顶出屏幕，这里压成 20px */
+  margin: 20px auto;
+  /* 裁掉溢出的圆角部分，视觉上更干净 */
+  overflow: hidden;
+}
+
+.bmf-table :deep(.bmf-form-dialog .el-dialog__body) {
+  /* flex: 1 表示「把除去标题和底部按钮之外的高度都占了」 */
+  flex: 1;
+  overflow: auto;
 }
 
 .search-form {

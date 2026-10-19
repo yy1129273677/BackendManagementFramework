@@ -374,3 +374,149 @@ export function normalizeOperations(input: unknown): TableOperations {
     deletePermission: raw.deletePermission ? String(raw.deletePermission) : base.deletePermission,
   };
 }
+
+/**
+ * 界面配置（存进 sys_table_config.config 的那段 JSON）。
+ *
+ * 干什么：
+ *   超管在「表格配置」页面里写一段 JSON，描述这张表长什么样。
+ *   目前只开放两个位置：表格的高度、新增/编辑弹框的长宽。
+ *   以后要加新的外观项，加进这个接口 + 下面的 asPixel 调用即可，
+ *   前端同名默认值在 client/src/components/table/types.ts 里补一行。
+ */
+export interface TableUiConfig {
+  /** 表格区域 */
+  table?: {
+    /** 表格固定高度（像素）。表格表头会吸顶、内容区自己滚动 */
+    height?: number;
+  };
+  /** 表单区域 */
+  form?: {
+    /** 新增/编辑弹框 */
+    dialog?: {
+      /** 弹框宽度（像素） */
+      width?: number;
+      /** 弹框高度（像素）。前端会再和窗口高度取小，避免小屏上超出屏幕 */
+      height?: number;
+    };
+  };
+}
+
+/**
+ * 把用户写的界面配置 JSON 校一遍。
+ *
+ * 干什么：
+ *   只放行我们认识的字段（table.height / form.dialog.width / form.dialog.height），
+ *   名字写错（比如把 height 拼成 heigth）会当场报错，而不是默默不生效。
+ *
+ * 参数：
+ *   input - 对象，或者 JSON 字符串（后台表单是文本域，可能直接把原文传过来）
+ *
+ * 返回：
+ *   只包含「用户真正写了」的字段的对象；缺的字段交给前端默认值兜底。
+ *   传空值（null / undefined / 空字符串）时返回 null，表示「没配过」。
+ *
+ * 注意：
+ *   - 抛的是普通 Error，由 TableConfigService.normalizeOrThrow 翻译成 HTTP 400
+ *   - 数值单位都是像素，超出范围直接拒绝，防止有人填 99999 把页面撑爆
+ *   - 整体 JSON 上限 20KB（和路由的 config 保持一致）
+ */
+export function normalizeTableUiConfig(input: unknown): TableUiConfig | null {
+  const raw = parseUiConfigJson(input);
+  if (raw === null) return null;
+
+  const result: TableUiConfig = {};
+
+  // 顶层只认 table / form 两个键，多写的一律报错
+  assertNoUnknownKeys(raw, ["table", "form"], "顶层");
+
+  // ---- 表格高度 ----
+  if (raw.table !== undefined) {
+    const table = asPlainObject(raw.table, "table");
+    assertNoUnknownKeys(table, ["height"], "table");
+    if (table.height !== undefined) {
+      result.table = { height: asPixel(table.height, "table.height", 100, 5000) };
+    }
+  }
+
+  // ---- 表单弹框的长宽 ----
+  if (raw.form !== undefined) {
+    const form = asPlainObject(raw.form, "form");
+    assertNoUnknownKeys(form, ["dialog"], "form");
+    if (form.dialog !== undefined) {
+      const dialog = asPlainObject(form.dialog, "form.dialog");
+      assertNoUnknownKeys(dialog, ["width", "height"], "form.dialog");
+      const size: { width?: number; height?: number } = {};
+      if (dialog.width !== undefined) size.width = asPixel(dialog.width, "form.dialog.width", 300, 5000);
+      if (dialog.height !== undefined) size.height = asPixel(dialog.height, "form.dialog.height", 200, 5000);
+      // 只写了 width 或只写了 height 都行，另一个用前端默认值
+      if (Object.keys(size).length > 0) result.form = { dialog: size };
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 把外面传进来的界面配置解析成对象。
+ *
+ * 返回值：
+ *   没配过（null / undefined / 空字符串 / 空对象）→ null
+ *   字符串 → JSON.parse 出来的对象
+ *   对象 → 原样返回
+ */
+function parseUiConfigJson(input: unknown): any | null {
+  if (input === undefined || input === null || input === "") return null;
+
+  let raw: any = input;
+  // 文本域传上来的是一整段文字，先当 JSON 解析；解析不了说明用户括号逗号写错了
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      throw new Error("界面配置不是合法的 JSON，请检查引号和逗号");
+    }
+  }
+
+  if (Array.isArray(raw)) throw new Error("界面配置必须是一个 JSON 对象，不能是数组");
+  if (typeof raw !== "object") throw new Error("界面配置必须是一个 JSON 对象");
+
+  // 和路由 config 一样限 20KB：防止有人往里塞图片 base64 之类的东西
+  if (JSON.stringify(raw).length > 20000) throw new Error("界面配置太大了（上限 20KB）");
+
+  // 空对象 {} 等价于「没配过」
+  if (Object.keys(raw).length === 0) return null;
+  return raw;
+}
+
+/** 确认拿到的是一层普通对象（不是 null、数组、字符串） */
+function asPlainObject(value: unknown, path: string): any {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`界面配置的 ${path} 必须是一个对象`);
+  }
+  return value;
+}
+
+/**
+ * 确认对象里没有我们不认识的字段。
+ *
+ * 为什么要这么严：JSON 是手写的，把 height 拼成 heigth 时如果不报错，
+ * 就会「配了但没生效」，排查起来很费劲；这里直接指出是哪个字段不认识。
+ */
+function assertNoUnknownKeys(value: any, allowed: string[], where: string): void {
+  const unknown = Object.keys(value).filter((key) => !allowed.includes(key));
+  if (unknown.length > 0) {
+    throw new Error(`界面配置的 ${where} 里不认识这些字段：${unknown.join("、")}（目前只支持 ${allowed.join("、")}）`);
+  }
+}
+
+/** 校验一个像素值：必须是数字，且落在 [min, max] 之间 */
+function asPixel(value: unknown, path: string, min: number, max: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`界面配置的 ${path} 必须是数字（单位像素）`);
+  }
+  if (value < min || value > max) {
+    throw new Error(`界面配置的 ${path} 必须在 ${min} ~ ${max} 之间（单位像素）`);
+  }
+  return Math.round(value);
+}

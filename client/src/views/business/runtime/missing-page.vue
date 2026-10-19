@@ -25,7 +25,7 @@
  * 自定义页面找不到时的提示页。
  *
  * 什么时候会看到它：
- *   路由管理里配的 componentPath（比如 examples/demo-table.vue）
+ *   路由管理里配的 componentPath（比如 business/examples/demo-table.vue）
  *   在前端 src/views 下找不到对应文件——通常是路径写错、或者文件还没提交。
  *
  * 为什么要有这个页面：

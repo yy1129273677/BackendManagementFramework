@@ -11,6 +11,7 @@ import {
   normalizeCustomActions,
   normalizeFields,
   normalizeOperations,
+  normalizeTableUiConfig,
   TableField,
   TableOperations,
 } from "./table-field.types";
@@ -103,6 +104,8 @@ export class TableConfigService {
     const fields = this.normalizeOrThrow(() => normalizeFields(dto.fields));
     const customActions = this.normalizeOrThrow(() => normalizeCustomActions(dto.customActions));
     const searchMode = this.normalizeSearchMode(dto.searchMode);
+    // 界面配置：允许「没配」（返回 null，前端用内置默认值兜底）
+    const uiConfig = this.normalizeOrThrow(() => normalizeTableUiConfig(dto.config));
 
     // 生成一个没被占用的 TCID（撞车概率极低，但代码里还是要处理）
     let tcid = generateTcid();
@@ -135,6 +138,8 @@ export class TableConfigService {
           operations: operations as any,
           customActions: customActions as any,
           pageSize: this.normalizePageSize(dto.pageSize),
+          // 界面配置：没配过时存 NULL，前端再用内置默认值兜底（这样以后加新配置项不用迁移老数据）
+          config: uiConfig as any,
           createdBy: user?.sub || null,
         },
       });
@@ -197,6 +202,11 @@ export class TableConfigService {
           ? (this.normalizeOrThrow(() => normalizeCustomActions(dto.customActions)) as any)
           : undefined,
         pageSize: dto.pageSize ? this.normalizePageSize(dto.pageSize) : undefined,
+        // 界面配置：不传 = 不改动；传空值 = 清空（回到内置默认）
+        config:
+          dto.config === undefined
+            ? undefined
+            : (this.normalizeOrThrow(() => normalizeTableUiConfig(dto.config)) as any),
       },
     });
 
@@ -267,6 +277,8 @@ export class TableConfigService {
       },
       // 自定义按钮：没配权限的一律可见，配了权限的按用户权限过滤
       customActions: customActions.filter((action) => allowed(action.permission)),
+      // 界面配置（表格高度、表单弹框长宽）：没配过返回 null，由前端用内置默认值兜底
+      config: config.config ?? null,
     };
   }
 

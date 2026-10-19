@@ -435,7 +435,7 @@ watch(() => auth.activeSystemCode, load);
 </script>
 
 <style lang="less" scoped>
-@import "../../styles/variables.less";
+@import "../../../styles/variables.less";
 
 .dashboard {
   min-height: 200px;

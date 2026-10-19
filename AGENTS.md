@@ -142,7 +142,7 @@ npm run build                    # vue-tsc + vite build → dist/
 1. `server/src/table-config/table-field.types.ts`：`FieldType` 联合类型 + `SQL_TYPE_MAP` + `defaultSearchOp`
 2. `server/src/table-data/table-data.service.ts`：`normalizeValue` 里的类型转换
 3. `client/src/components/table/index.vue`：搜索控件 + 表单控件（两个 `v-else-if` 分支）
-4. `client/src/views/table-config/index.vue`：`FIELD_TYPES` 下拉加一项
+4. `client/src/views/base/table-config/index.vue`：`FIELD_TYPES` 下拉加一项
 5. `docs/design/05-rules.md` 的类型映射表补一行
 
 ### 加一种路由类型
@@ -154,7 +154,7 @@ npm run build                    # vue-tsc + vite build → dist/
 
 ### 写一个自定义业务页面（最常见）
 
-1. 复制 `client/src/views/examples/demo-table.vue`
+1. 复制 `client/src/views/business/examples/demo-table.vue`
 2. 改 TCID，删掉用不到的插槽
 3. 在「路由管理」里建一条 `CUSTOM` 路由，`componentPath` 填相对 `src/views` 的路径
 4. 刷新页面，菜单出现
@@ -256,5 +256,13 @@ docs/
 6. **校验规则只存「正则字符串 + 校验器名字」**，**禁止把 JS 代码存数据库执行**；
    自定义校验函数写在 `client/src/components/table/validators.ts`，用 `registerValidator` 注册。
 
-7. **需求文档流程**：需求先出「整理版」（`docs/requirements/00X-...-整理版.md`，含我的判断与待确认点），
+7. **表格的「界面配置」存 `sys_table_config.config`（可空 JSON）**：
+   目前只有 `table.height`、`form.dialog.width / height` 三个键，单位像素；
+   后端 `normalizeTableUiConfig` 负责校验（**不认识的 key 一律报错**，防止把 height 拼错后静默失效），
+   前端默认值在 `client/src/components/table/types.ts` 的 `DEFAULT_TABLE_UI_CONFIG`。
+   **`config` 允许为空**（表示"没配过"，前端用内置默认值兜底），
+   所以以后往这段 JSON 里加新键不用给老数据做迁移；键的优先级是
+   `组件 prop > 后台配置 > 内置默认`。
+
+8. **需求文档流程**：需求先出「整理版」（`docs/requirements/00X-...-整理版.md`，含我的判断与待确认点），
    确认后再开发、回填实现对照，并删掉原始需求文件。

@@ -3,7 +3,7 @@
     <el-popover
       v-model:visible="visible"
       placement="bottom-start"
-      :width="460"
+      :width="560"
       trigger="click"
       popper-class="icon-picker-popper"
     >
@@ -145,6 +145,8 @@ defineExpose({ open: () => (visible.value = true) });
   border-radius: 4px;
   cursor: pointer;
   border: 1px solid transparent;
+  /* 栅格项默认最小宽度是内容宽度，长图标名（nowrap）会把整行撑宽、触发横向滚动条 */
+  min-width: 0;
 }
 
 .icon-cell:hover {

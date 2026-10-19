@@ -313,7 +313,7 @@ async function main() {
       title: "自定义页面示例",
       path: "/custom/demo",
       type: "CUSTOM",
-      componentPath: "examples/demo-table.vue",
+      componentPath: "business/examples/demo-table.vue",
       icon: "Grid",
       sort: 2,
       visible: true,

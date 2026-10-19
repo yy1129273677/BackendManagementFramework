@@ -17,7 +17,7 @@ export class CreateRouteDto {
   path: string;
   /** CUSTOM = 自己开发的页面；TABLE = 用 TCID 配置出来的表格页 */
   type: "CUSTOM" | "TABLE";
-  /** 自定义页面的 vue 文件路径，相对 client/src/views，例如 examples/demo-table.vue */
+  /** 自定义页面的 vue 文件路径，相对 client/src/views，例如 business/examples/demo-table.vue */
   componentPath?: string;
   /** 表格路由绑定的 TCID */
   tcid?: string;

@@ -11,6 +11,12 @@ import { useMenuStore } from "@/stores/menu";
  *   2. 动态路由：子系统里的业务页面，登录后从 /api/routes/my 拉下来，
  *      TABLE 类型渲染成 <Table :tcid>，CUSTOM 类型按 componentPath 动态加载 vue 文件
  *
+ * 页面文件按用途分成两组放在 views 下，和左侧菜单的两组一一对应：
+ *   views/base/     —— 基本路由：代码里写死的静态路由（登录、首页、子系统管理、表格配置、
+ *                      路由管理、用户管理、角色管理、业务字典）
+ *   views/business/ —— 业务菜单：数据库配出来的动态路由用到的页面
+ *                      （runtime 表格容器/找不到页、examples 自定义页面示例）
+ *
  * 注意：
  *   用的是 hash 模式（地址栏带 #），部署到 Nginx 时不需要配 try_files 回退，
  *   少一个常见的 404 坑。
@@ -27,7 +33,7 @@ export const staticRoutes: RouteRecordRaw[] = [
   {
     path: "/login",
     name: "login",
-    component: () => import("@/views/login/index.vue"),
+    component: () => import("@/views/base/login/index.vue"),
     meta: { title: "登录", public: true },
   },
   {
@@ -39,13 +45,13 @@ export const staticRoutes: RouteRecordRaw[] = [
       {
         path: "dashboard",
         name: "dashboard",
-        component: () => import("@/views/dashboard/index.vue"),
+        component: () => import("@/views/base/dashboard/index.vue"),
         meta: { title: "首页", icon: "HomeFilled" },
       },
       {
         path: "system",
         name: "system",
-        component: () => import("@/views/system/index.vue"),
+        component: () => import("@/views/base/system/index.vue"),
         meta: {
           title: "子系统管理",
           icon: "Grid",
@@ -55,31 +61,31 @@ export const staticRoutes: RouteRecordRaw[] = [
       {
         path: "table-config",
         name: "tableConfig",
-        component: () => import("@/views/table-config/index.vue"),
+        component: () => import("@/views/base/table-config/index.vue"),
         meta: { title: "表格配置", icon: "Document", permission: "table:read" },
       },
       {
         path: "route",
         name: "route",
-        component: () => import("@/views/route/index.vue"),
+        component: () => import("@/views/base/route/index.vue"),
         meta: { title: "路由管理", icon: "Guide", permission: "route:read" },
       },
       {
         path: "user",
         name: "user",
-        component: () => import("@/views/user/index.vue"),
+        component: () => import("@/views/base/user/index.vue"),
         meta: { title: "用户管理", icon: "User", permission: "user:read" },
       },
       {
         path: "role",
         name: "role",
-        component: () => import("@/views/role/index.vue"),
+        component: () => import("@/views/base/role/index.vue"),
         meta: { title: "角色管理", icon: "Avatar", permission: "role:read" },
       },
       {
         path: "dict",
         name: "dict",
-        component: () => import("@/views/dict/index.vue"),
+        component: () => import("@/views/base/dict/index.vue"),
         meta: {
           title: "业务字典",
           icon: "Collection",
@@ -90,7 +96,7 @@ export const staticRoutes: RouteRecordRaw[] = [
         // 表格预览页：配置完一张表，不建路由也能先看看长什么样
         path: "preview/:tcid",
         name: "tablePreview",
-        component: () => import("@/views/runtime/table-page.vue"),
+        component: () => import("@/views/business/runtime/table-page.vue"),
         meta: { title: "表格预览", hidden: true, permission: "table:read" },
       },
     ],
@@ -104,7 +110,7 @@ export const staticRoutes: RouteRecordRaw[] = [
 /**
  * 所有 views 下的 vue 文件，做成「路径 → 加载函数」的映射。
  *
- * 用途：自定义页面路由里配的 componentPath（比如 examples/demo-table.vue）
+ * 用途：自定义页面路由里配的 componentPath（比如 business/examples/demo-table.vue）
  * 就是来这里找对应文件的。找不到说明路径配错了，会渲染一个友好提示页。
  */
 const viewModules = import.meta.glob("../views/**/*.vue");
@@ -125,14 +131,14 @@ export async function setupDynamicRoutes(router: any): Promise<void> {
 
     if (item.type === "TABLE") {
       if (!item.tcid) continue;
-      component = () => import("@/views/runtime/table-page.vue");
+      component = () => import("@/views/business/runtime/table-page.vue");
     } else {
       const path = String(item.componentPath || "").replace(/^\/+/, "");
       const key = `../views/${path}`;
       component = viewModules[key];
       if (!component) {
         // 路径配错 / 文件还没提交：渲染提示页，而不是白屏
-        component = () => import("@/views/runtime/missing-page.vue");
+        component = () => import("@/views/business/runtime/missing-page.vue");
       }
     }
 

@@ -95,7 +95,7 @@
         </el-form-item>
 
         <el-form-item v-else label="前端文件路径" required>
-          <el-input v-model="form.componentPath" placeholder="如：examples/demo-table.vue" />
+          <el-input v-model="form.componentPath" placeholder="如：business/examples/demo-table.vue" />
           <div class="text-muted">
             相对 <code>client/src/views</code> 的 .vue 文件路径。文件要先存在，否则打开会提示「页面找不到」。
           </div>

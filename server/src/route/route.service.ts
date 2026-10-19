@@ -13,7 +13,7 @@ const COMPONENT_PATTERN = /^[A-Za-z0-9_\-/]+\.vue$/;
  * 路由（菜单）管理。
  *
  * 两种路由：
- *   CUSTOM —— 自己写的 vue 页面。超管只填「文件路径」，比如 examples/demo-table.vue，
+ *   CUSTOM —— 自己写的 vue 页面。超管只填「文件路径」，比如 business/examples/demo-table.vue，
  *             前端用 import.meta.glob 把它加载成页面。
  *   TABLE  —— 配置出来的表格。超管填一个 TCID，前端渲染成 <Table :tcid="TCID" />，
  *             整张表（搜索项、列、按钮）都由配置决定。
@@ -142,10 +142,12 @@ export class RouteService {
 
     if (type === "CUSTOM") {
       if (isCreate && !componentPath) {
-        throw new BadRequestException("自定义页面必须填写前端文件路径，例如 examples/demo-table.vue");
+        throw new BadRequestException("自定义页面必须填写前端文件路径，例如 business/examples/demo-table.vue");
       }
       if (componentPath && !COMPONENT_PATTERN.test(componentPath)) {
-        throw new BadRequestException("前端文件路径不合法：相对 src/views 的 .vue 文件，例如 examples/demo-table.vue");
+        throw new BadRequestException(
+          "前端文件路径不合法：相对 src/views 的 .vue 文件，例如 business/examples/demo-table.vue",
+        );
       }
       tcid = null;
     } else {

@@ -88,7 +88,7 @@
 | 用户名           | `^[a-zA-Z][a-zA-Z0-9_]{2,31}$`                   | `zhangsan` ✅                            | 400             |
 | 字典编码         | `^[a-z][a-z0-9_]{1,31}$`                         | `order_status` ✅                        | 400             |
 | 路由路径         | `^/[A-Za-z0-9_\-/]*$`                            | `/order/list` ✅                         | 400             |
-| 自定义页面路径   | `^[A-Za-z0-9_\-/]+\.vue$`                        | `examples/demo-table.vue` ✅             | 400             |
+| 自定义页面路径   | `^[A-Za-z0-9_\-/]+\.vue$`                        | `business/examples/demo-table.vue` ✅    | 400             |
 | 自定义按钮 value | `^[A-Za-z0-9_-]{1,32}$`                          | `ship` ✅、`标记发货` ❌                 | 400             |
 
 ## 6. 必填与空值规则

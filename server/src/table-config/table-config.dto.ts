@@ -18,6 +18,12 @@ export class CreateTableConfigDto {
   customActions?: any[];
   /** 每页条数 */
   pageSize?: number;
+  /**
+   * 界面配置（表格高度、表单弹框长宽）。
+   * 可以是对象，也可以是文本域传上来的 JSON 字符串；
+   * 具体校验在 table-field.types.ts 的 normalizeTableUiConfig 里做。
+   */
+  config?: any;
 }
 
 export class UpdateTableConfigDto {
@@ -29,4 +35,6 @@ export class UpdateTableConfigDto {
   operations?: any;
   customActions?: any[];
   pageSize?: number;
+  /** 界面配置；不传表示「不改」，传 null / 空字符串表示「清空，回到内置默认」 */
+  config?: any;
 }

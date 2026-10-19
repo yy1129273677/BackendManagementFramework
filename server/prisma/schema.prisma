@@ -178,6 +178,9 @@ model TableConfig {
   operations    Json
   /// 自定义操作按钮：[{label,value,permission}]
   customActions Json     @map("custom_actions")
+  /// 界面配置 JSON：{ table: { height }, form: { dialog: { width, height } } }。
+  /// 为空表示「没配过」，前端用内置默认值兜底（默认 700 / 1200×960）
+  config        Json?
   pageSize      Int      @default(20) @map("page_size")
   createdBy     String?  @map("created_by") @db.Uuid
   createdAt     DateTime @default(now()) @map("created_at")

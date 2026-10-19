@@ -77,7 +77,7 @@
 
 ### 2.3 「自定义页面配置前端 js 路径」→ 构建期 vue 文件路径
 
-- **实现**：`componentPath` 填相对 `client/src/views` 的 `.vue` 文件路径（如 `examples/demo-table.vue`），
+- **实现**：`componentPath` 填相对 `client/src/views` 的 `.vue` 文件路径（如 `business/examples/demo-table.vue`），
   前端用 `import.meta.glob` 在构建期建立映射。
 - **代价**：新增页面要重新构建/发版；换来的是类型安全、无运行时信任问题。
 - 备选（运行时动态加载外部 JS 文件）需要处理信任/沙箱/版本，暂不做。
@@ -106,7 +106,7 @@
 | B10 | 生成 TCID、配置入库                       | ✅                      | `tcid.generator.ts`、`sys_table_config`                                              |
 | B11 | 操作列增删改权限                          | ✅                      | `operations` JSON + 后端双层权限校验                                                 |
 | B12 | 自定义按钮 label + value                  | ✅                      | `custom_actions`、表格配置设计器页面                                                 |
-| B13 | 自定义按钮用公用组件 + 插槽               | ✅                      | `#action-<value>`，示例 `views/examples/demo-table.vue`                              |
+| B13 | 自定义按钮用公用组件 + 插槽               | ✅                      | `#action-<value>`，示例 `views/business/examples/demo-table.vue`                     |
 | B14 | `<table :tcid>` 渲染整张表                | ✅                      | `client/src/components/table/index.vue`                                              |
 | B15 | slot 匹配配置里的 value                   | ✅                      | `resolveActionSlotName()`、`utils.spec.ts`                                           |
 | B16 | 目标是快速搭建后台                        | ✅                      | 四步流程见 `docs/design/03-flows.md`                                                 |

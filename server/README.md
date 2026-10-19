@@ -544,7 +544,7 @@ npm run format   # 格式化整个仓库
    第二个节点会带 `note`：「与「修改（订单列表）」是同一个权限码，勾一个两个都会生效」。
 
 > 角色编辑保存时，前端会把「树上不存在的旧权限码」原样保留
-> （`client/src/views/role/index.vue` 的 `legacyCodes`），避免打开旧角色点保存就把老权限删掉。
+> （`client/src/views/base/role/index.vue` 的 `legacyCodes`），避免打开旧角色点保存就把老权限删掉。
 
 ### 10.7 权限码迁移脚本（把老表迁成按 TCID）
 

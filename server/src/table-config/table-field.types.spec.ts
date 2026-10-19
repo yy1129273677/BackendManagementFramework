@@ -7,6 +7,7 @@ import {
   normalizeFields,
   normalizeFormSpan,
   normalizeOperations,
+  normalizeTableUiConfig,
   sqlTypeFor,
 } from "./table-field.types";
 
@@ -163,6 +164,62 @@ describe("table-field 字段配置规范化", () => {
       expect(normalizeFieldRules({}, "a")).toBeUndefined();
       expect(normalizeFieldRules(null, "a")).toBeUndefined();
       expect(normalizeFields([{ name: "a", type: "string" }])[0].rules).toBeUndefined();
+    });
+  });
+
+  describe("界面配置（表格高度、表单弹框长宽）", () => {
+    it("完整配置原样保留", () => {
+      expect(
+        normalizeTableUiConfig({
+          table: { height: 700 },
+          form: { dialog: { width: 1200, height: 960 } },
+        }),
+      ).toEqual({
+        table: { height: 700 },
+        form: { dialog: { width: 1200, height: 960 } },
+      });
+    });
+
+    it("只写一部分时，另一部分留给前端默认值兜底", () => {
+      expect(normalizeTableUiConfig({ table: { height: 500 } })).toEqual({ table: { height: 500 } });
+      expect(normalizeTableUiConfig({ form: { dialog: { width: 900 } } })).toEqual({
+        form: { dialog: { width: 900 } },
+      });
+    });
+
+    it("文本域传上来的 JSON 字符串能解析", () => {
+      expect(normalizeTableUiConfig('{"table":{"height":600}}')).toEqual({ table: { height: 600 } });
+    });
+
+    it("没配过（空值 / 空对象 / 空字符串）返回 null", () => {
+      expect(normalizeTableUiConfig(undefined)).toBeNull();
+      expect(normalizeTableUiConfig(null)).toBeNull();
+      expect(normalizeTableUiConfig("")).toBeNull();
+      expect(normalizeTableUiConfig({})).toBeNull();
+    });
+
+    it("JSON 写错时报错，而不是默默不生效", () => {
+      expect(() => normalizeTableUiConfig("{table:}")).toThrow(/不是合法的 JSON/);
+      expect(() => normalizeTableUiConfig([])).toThrow(/不能是数组/);
+      expect(() => normalizeTableUiConfig("abc")).toThrow(/不是合法的 JSON/);
+    });
+
+    it("字段名拼错时明确指出（防止 height 写成 heigth）", () => {
+      expect(() => normalizeTableUiConfig({ table: { heigth: 700 } })).toThrow(/不认识/);
+      expect(() => normalizeTableUiConfig({ tables: { height: 700 } })).toThrow(/不认识/);
+      expect(() => normalizeTableUiConfig({ form: { dialog: { size: 1 } } })).toThrow(/不认识/);
+    });
+
+    it("数值超出合理范围时拒绝", () => {
+      expect(() => normalizeTableUiConfig({ table: { height: 50 } })).toThrow(/100 ~ 5000/);
+      expect(() => normalizeTableUiConfig({ table: { height: 99999 } })).toThrow(/100 ~ 5000/);
+      expect(() => normalizeTableUiConfig({ form: { dialog: { width: 100 } } })).toThrow(/300 ~ 5000/);
+      expect(() => normalizeTableUiConfig({ form: { dialog: { height: 10 } } })).toThrow(/200 ~ 5000/);
+      expect(() => normalizeTableUiConfig({ table: { height: "700" } })).toThrow(/必须是数字/);
+    });
+
+    it("超过 20KB 直接拒绝", () => {
+      expect(() => normalizeTableUiConfig({ table: { height: 700, junk: "x".repeat(21000) } })).toThrow();
     });
   });
 });
