@@ -7,7 +7,14 @@
 #
 # 它按顺序做这些事：
 #   1. git pull 拉最新代码
-#   2. docker compose up -d --build 重新构建并重启有变化的容器
+#   2. docker compose up -d 用已上传的镜像重建容器（默认不在服务器上 build）
+#
+# 为什么默认不 build：
+#   这台云服务器拉 Docker Hub 基础镜像极慢（node:22-alpine 的 55MB 层
+#   拉 10 分钟还是 0B），在服务器上 build 基本会卡死。
+#   所以镜像由本机 `deploy-images.ps1` 构建、上传。
+#   如果你确实想在服务器上构建：bash update.sh --build
+
 #   3. 等后端健康检查通过（最多 90 秒）
 #   4. 打印容器状态 + 跑一遍自检（健康接口、登录接口）
 #
@@ -23,8 +30,14 @@ cd "$(dirname "$0")"
 echo "==> 1/4 拉取代码"
 git pull --ff-only
 
-echo "==> 2/4 重新构建并启动容器（只有变了的部分会重建）"
-docker compose up -d --build
+BUILD_FLAG=""
+if [ "${1:-}" = "--build" ]; then BUILD_FLAG="--build"; fi
+if [ -z "$BUILD_FLAG" ]; then
+    echo "==> 2/4 用已上传的镜像重建容器（不在服务器上构建；要构建请用 --build）"
+else
+    echo "==> 2/4 在服务器上构建并启动容器（会拉 Docker Hub，可能很慢）"
+fi
+docker compose up -d $BUILD_FLAG
 
 echo "==> 3/4 等待后端就绪（最多 90 秒）"
 BACKEND_READY=0

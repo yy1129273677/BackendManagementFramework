@@ -6,19 +6,89 @@
 >
 > - `http://公网IP:8081` —— 打开就是登录页
 >
-> 本手册里的命令，**没有特别说明时都在服务器上执行**，且工作目录是项目根目录（`~/bmf`）。
+> 本手册里的命令，**没有特别说明时都在服务器上执行**，且工作目录是项目根目录（`/root/bmf`）。
 >
 > 📌 **已经部署过、只是要更新代码？** 直接看下面第一节「⭐ 日常更新」。
 >
 > ⚠️ **验证状态**：本手册里的 Docker 相关命令是按照 `docker-compose.yml`、两个 `Dockerfile`、
-> `nginx.conf` 编写的，但**开发机上没有运行中的 Docker，这些命令没有在本机实际跑过**。
-> 本机实际验证过的是：后端 `prisma validate` / `nest build` / 47 个单测、
-> 前端 `vite build` / 18 个单测、以及后端无库启动冒烟（健康接口 200、受保护接口 401）。
-> 第一次上线请按第 5 节的「自检」逐条确认，不要跳过。
+> `nginx.conf` 编写的。**2026-10-19 已在真实服务器上完整跑通一次**（见下面「已部署实例」）。
 
 ---
 
-## ⭐ 日常更新：改完代码怎么上线（最常用，先看这里）
+## ⭐ 已部署实例（2026-10-19）
+
+| 项目     | 值                                                                          |
+| -------- | --------------------------------------------------------------------------- |
+| 访问地址 | `http://8.147.114.201:8081`                                                 |
+| 服务器   | 阿里云 ECS，Ubuntu 22.04，2 核 2G（4G swap）                                |
+| 项目目录 | `/root/bmf`                                                                 |
+| 对外端口 | `8081`（web 容器映射 `8081:80`；数据库仍只绑 `127.0.0.1:5434`）             |
+| 超管账号 | `yy1 / yy1129273677`（系统编码留空）                                        |
+| 演示账号 | `demo / demo123456`（系统编码 `demo`）                                      |
+| 同机项目 | jisu 在 `/root/jisu-ai`，占 `8080` / `8443`，本项目避开这两个端口           |
+
+### 为什么镜像要「本机构建 + 上传」，而不是服务器上 build
+
+这台服务器拉 Docker Hub 基础镜像**极慢**（实测 `node:22-alpine` 的 55MB 层拉了 10 分钟仍是 0B，
+因为 3M 带宽 + 官方源），在服务器上 `docker compose build` 基本会卡死。
+所以沿用 jisu 项目验证过的做法：
+
+```
+本机 docker compose build
+  → docker save 导出镜像
+  → scp 上传
+  → 服务器 docker load
+  → docker compose up -d --force-recreate
+```
+
+仓库根目录的 **`deploy-images.ps1`** 把这一串都封装好了。
+
+### 首次部署（已经做过，记录备查）
+
+```bash
+# 服务器上
+cd /root
+git clone https://github.com/yy1129273677/BackendManagementFramework.git bmf
+cd bmf
+cp .env.example .env
+# 生成 JWT_SECRET / 数据库密码，CORS_ORIGIN 改成 http://8.147.114.201:8081
+vi .env
+
+# 本机（PowerShell，项目根目录）：构建并上传镜像
+.\deploy-images.ps1
+
+# 服务器上：首次初始化数据（只跑一次）
+cd /root/bmf && docker compose exec -T server npm run seed
+
+# 自检
+curl -sS http://127.0.0.1:8081/healthz
+curl -sS http://127.0.0.1:8081/api/health
+```
+
+### ⭐ 日常更新（改完代码怎么上线）
+
+```powershell
+# ① 本机：提交并推送
+git add .
+git commit -m "改了什么"
+git push
+
+# ② 本机：一键发布（构建镜像 → 上传 → 服务器导入 → 重建容器 → 自检）
+.\deploy-images.ps1
+```
+
+只改了前端可以更快：
+
+```powershell
+.\deploy-images.ps1 -Only web
+```
+
+> 服务器上的 `update.sh` 现在默认**不在服务器上构建**（`docker compose up -d` 用已上传的镜像），
+> 只做一遍重建 + 自检。如果确实想在服务器上构建（网络好的环境），用 `bash update.sh --build`。
+
+---
+
+## ⭐ 日常更新（通用流程，其他环境）
 
 部署完成之后，**唯一需要反复操作**的流程。
 
@@ -34,8 +104,9 @@ git push
 bash ~/bmf/update.sh
 ```
 
-`update.sh` 依次执行：`git pull` → `docker compose up -d --build` → 等后端就绪（最多 90 秒）
+`update.sh` 依次执行：`git pull` → `docker compose up -d` → 等后端就绪（最多 90 秒）
 → 打印容器状态 → 自检（Nginx `/healthz`、后端 `/api/health`）。
+需要「在服务器上从源码构建」时加 `--build`。
 
 > 📄 这个脚本就在仓库根目录（`update.sh`），随 `git pull` 一起更新，不用手工维护。
 

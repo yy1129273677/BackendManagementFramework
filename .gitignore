@@ -31,3 +31,7 @@ Thumbs.db
 backup/
 *.dump
 *.sql.gz
+
+# 发布临时包（deploy-images.ps1 生成）
+*.tar
+*.tar.gz
