@@ -4,7 +4,7 @@
 > 用 Docker Compose 跑「PostgreSQL(pgvector) + 后端 + 前端/Nginx」三个容器，
 > 对外只开一个端口：
 >
-> - `http://公网IP:8090` —— 打开就是登录页
+> - `http://公网IP:8081` —— 打开就是登录页
 >
 > 本手册里的命令，**没有特别说明时都在服务器上执行**，且工作目录是项目根目录（`~/bmf`）。
 >
@@ -74,7 +74,7 @@ cd ~/bmf && git pull && docker compose up -d --build web
 三个容器，一条内网链路：
 
 ```
-浏览器 ──http :8090──▶ [web: nginx]
+浏览器 ──http :8081──▶ [web: nginx]
                         │  /api/*  反向代理（容器内网）
                         ▼
                      [server: nestjs :3000]
@@ -86,7 +86,7 @@ cd ~/bmf && git pull && docker compose up -d --build web
 
 | 容器         | 镜像来源                 | 对外端口         | 说明                                                        |
 | ------------ | ------------------------ | ---------------- | ----------------------------------------------------------- |
-| `bmf-web`    | `./client/Dockerfile`    | **8090:80**      | Vite 构建产物 + Nginx，反代 `/api`                          |
+| `bmf-web`    | `./client/Dockerfile`    | **8081:80**      | Vite 构建产物 + Nginx，反代 `/api`                          |
 | `bmf-server` | `./server/Dockerfile`    | 不暴露           | Dockerfile 启动命令会先 `prisma migrate deploy`             |
 | `bmf-db`     | `pgvector/pgvector:pg16` | `127.0.0.1:5434` | 只绑本机回环，公网访问不到；5434 避免和宿主机已有 PG 撞端口 |
 
@@ -163,7 +163,7 @@ JWT_SECRET=$(openssl rand -hex 32)
 | `POSTGRES_DB`          | `bmf`                   | 数据库名                                 |
 | `JWT_SECRET`           | 无（必填）              | token 签名密钥，改了所有用户掉线         |
 | `JWT_EXPIRES_IN`       | `8h`                    | 登录有效期                               |
-| `CORS_ORIGIN`          | `http://localhost:8090` | 同域部署保持默认即可                     |
+| `CORS_ORIGIN`          | `http://localhost:8081` | 同域部署保持默认即可                     |
 | `SUPER_ADMIN_USERNAME` | `yy1`                   | 超管用户名（只在首次 seed 时生效）       |
 | `SUPER_ADMIN_PASSWORD` | `yy1129273677`          | 超管初始密码，**上线后请立刻改**         |
 
@@ -213,29 +213,29 @@ docker compose exec server npm run seed
 
 ```bash
 # ① Nginx 活着吗
-curl -fsS http://127.0.0.1:8090/healthz && echo " <- nginx ok"
+curl -fsS http://127.0.0.1:8081/healthz && echo " <- nginx ok"
 
 # ② 后端活着吗（应该看到 "status":"ok"、"db":true、"pgvector":true）
-curl -fsS http://127.0.0.1:8090/api/health
+curl -fsS http://127.0.0.1:8081/api/health
 
 # ③ 登录能力（应该返回 token）
-curl -fsS -X POST http://127.0.0.1:8090/api/auth/login \
+curl -fsS -X POST http://127.0.0.1:8081/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"username":"yy1","password":"yy1129273677"}'
 
 # ④ 带 token 拿子系统列表（应该返回 1 条 main）
-TOKEN=$(curl -s -X POST http://127.0.0.1:8090/api/auth/login \
+TOKEN=$(curl -s -X POST http://127.0.0.1:8081/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"username":"yy1","password":"yy1129273677"}' | sed -E 's/.*"token":"([^"]+)".*/\1/')
-curl -fsS http://127.0.0.1:8090/api/systems -H "Authorization: Bearer $TOKEN"
+curl -fsS http://127.0.0.1:8081/api/systems -H "Authorization: Bearer $TOKEN"
 
 # ⑤ 用示例 TCID 取渲染配置（验证"配置驱动表格"这条链路）
-curl -fsS -X POST http://127.0.0.1:8090/api/auth/login \
+curl -fsS -X POST http://127.0.0.1:8081/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"username":"demo","password":"demo123456","systemCode":"demo"}' | head -c 300
 ```
 
-浏览器打开 `http://公网IP:8090`，用超管 `yy1 / yy1129273677`（系统编码留空）登录。
+浏览器打开 `http://公网IP:8081`，用超管 `yy1 / yy1129273677`（系统编码留空）登录。
 
 > 🧪 **更完整的验证**：本地或跳板机上可以跑 `server/scripts/smoke-test.ps1`，
 > 它会真实走一遍「建子系统 → 配表格拿 TCID → 增删改查 → 建路由 → 安全用例」，
@@ -247,14 +247,14 @@ curl -fsS -X POST http://127.0.0.1:8090/api/auth/login \
 
 | 端口 | 用途                        | 要不要对公网开放                           |
 | ---- | --------------------------- | ------------------------------------------ |
-| 8090 | 前端 + 后端 API（经 Nginx） | ✅ **要**                                  |
+| 8081 | 前端 + 后端 API（经 Nginx） | ✅ **要**                                  |
 | 3000 | 后端直连                    | ❌ 不需要（`docker-compose.yml` 里没暴露） |
 | 5434 | 数据库（宿主机回环）        | ❌ **绝对不要**                            |
 
-云厂商的安全组要放行 8090；Ubuntu 自带 ufw 如果开了：
+云厂商的安全组要放行 8081；Ubuntu 自带 ufw 如果开了：
 
 ```bash
-ufw allow 8090/tcp
+ufw allow 8081/tcp
 ufw reload
 ```
 
@@ -336,7 +336,7 @@ docker compose exec -T db psql -U bmf -d bmf < backup-2025-01-01.sql
    `depends_on: db: condition: service_healthy`，如果还遇到，先 `docker compose logs db` 看数据库日志。
 
 5. **端口冲突**
-   宿主机已经有 8090 或 5434 被占用。改 `docker-compose.yml` 里端口映射的**左边**（宿主机侧）即可。
+   宿主机已经有 8081 或 5434 被占用。改 `docker-compose.yml` 里端口映射的**左边**（宿主机侧）即可。
 
 6. **访问 502**
    Nginx 活着但后端还没起来（正在跑迁移）或后端崩了：
@@ -376,7 +376,7 @@ docker compose exec -T db psql -U bmf -d bmf < backup-2025-01-01.sql
 - [ ] 数据库端口没有对公网开放（`docker compose ps` 看端口绑定是不是 `127.0.0.1:5434`）
 - [ ] 服务器时间已校准（`timedatectl`，时区建议 `Asia/Shanghai`）
 - [ ] 已做一次全库备份并确认文件大小正常
-- [ ] 8090 是明文 HTTP：如果传输内容敏感，建议加成 HTTPS（自签证书或云厂商证书）
+- [ ] 8081 是明文 HTTP：如果传输内容敏感，建议加成 HTTPS（自签证书或云厂商证书）
 
 ---
 

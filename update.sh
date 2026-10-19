@@ -48,10 +48,10 @@ echo "---- 容器状态 ----"
 docker compose ps
 
 echo "---- 健康检查 ----"
-curl -fsS http://127.0.0.1:8090/healthz && echo " (nginx ok)" || echo "!! nginx 不可用"
-curl -fsS http://127.0.0.1:8090/api/health && echo "" || echo "!! 后端健康接口不可用"
+curl -fsS http://127.0.0.1:8081/healthz && echo " (nginx ok)" || echo "!! nginx 不可用"
+curl -fsS http://127.0.0.1:8081/api/health && echo "" || echo "!! 后端健康接口不可用"
 
 echo ""
 echo "✅ 更新完成"
-echo "   前端入口： http://<服务器公网IP>:8090"
+echo "   前端入口： http://<服务器公网IP>:8081"
 echo "   提示：改了 JWT_SECRET 后需要重新登录；改了数据库密码需要重建数据卷（会清空数据）"
