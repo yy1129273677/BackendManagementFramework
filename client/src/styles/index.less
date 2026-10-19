@@ -1,0 +1,66 @@
+/**
+ * 全局样式。
+ * 只放跨页面通用的东西，单个页面的样式写在各自组件里。
+ * 颜色/圆角等统一取自 variables.less，不要在组件里写死十六进制。
+ */
+
+@import "./variables.less";
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  background: @bg-page;
+}
+
+/* 页面通用容器：白底 + 圆角 + 内边距 */
+.page-card {
+  background: @bg-white;
+  border-radius: @radius;
+  padding: 16px;
+  box-shadow: @shadow-card;
+}
+
+/* 搜索栏和工具栏之间的间距 */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.text-muted {
+  color: @text-secondary;
+  font-size: 12px;
+}
+
+/* 表格表头：品牌蓝浅底 + 文字加粗，和正文行区分开。
+   背景色用 Element Plus 官方 CSS 变量控制，全站 el-table 统一生效。 */
+.el-table {
+  --el-table-header-bg-color: #ecf5ff;
+}
+
+.el-table th.el-table__cell {
+  font-weight: 600;
+}
+
+/* 表头文字：能排成一行就居中，需要换行时退回左对齐。
+   做法：把表头里那层 .cell 变成 flex 容器，让文字自己成为一个「内容多宽就占多宽」的子项。
+   - 文字比单元格窄 → 子项只有文字那么宽，被 justify-content 推到正中间，看起来就是居中；
+   - 文字长到一行放不下 → 子项被压满整个单元格，此时它已经占满宽度，居中不再生效，
+     文字按默认的左对齐排版，两行也不会左右参差。
+   注意：只作用于表头（th），正文单元格不受影响。 */
+/* .el-table th.el-table__cell > .cell {
+  display: flex;
+  justify-content: center;
+} */

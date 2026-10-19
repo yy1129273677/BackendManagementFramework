@@ -111,19 +111,20 @@ function handleEnter(): void {
 }
 </script>
 
-<style scoped>
+<style lang="less" scoped>
+@import "../../styles/variables.less";
 .login-page {
   height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1f2d3d 0%, #2d4a63 100%);
+  background: linear-gradient(135deg, @sidebar-bg 0%, @sidebar-bg-deep 100%);
 }
 
 .login-card {
   width: 400px;
   padding: 32px;
-  background: #fff;
+  background: @bg-white;
   border-radius: 10px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
 }
@@ -141,9 +142,9 @@ function handleEnter(): void {
 .login-tips {
   margin-top: 20px;
   padding-top: 14px;
-  border-top: 1px dashed #e4e7ed;
+  border-top: 1px dashed @border-light;
   font-size: 12px;
-  color: #909399;
+  color: @text-secondary;
   line-height: 1.9;
 }
 

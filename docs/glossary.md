@@ -60,3 +60,16 @@
 | **种子**     | `server/prisma/seed.ts`，创建主系统/超管/demo 数据，可重复执行                                                        |
 | **pgvector** | PostgreSQL 的向量扩展，本项目已启用并建了 `sys_vector_document` 表，**语义检索功能属于预留，尚未接入 embedding 模型** |
 | **健康检查** | `GET /api/health`，返回数据库与 pgvector 状态                                                                         |
+
+## 补充术语（需求 002 之后）
+
+| 术语                       | 定义                                                                                                                  |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **权限树**                 | 角色编辑页里的树：系统功能 + 菜单 + 表格按钮。勾选即授权，接口 `GET /api/roles/permission-tree` 返回 `{tree, keyMap}` |
+| **菜单权限码**             | `menu:<routeId>`。路由 `accessType=ROLE` 时角色必须有它才能看到菜单；勾选自动生成，不手填                             |
+| **访问控制（accessType）** | 路由开关：`PUBLIC` = 登录即可见；`ROLE` = 需要在权限树里勾                                                            |
+| **路由 JSON 配置**         | 路由上的 `config`（JSON），注入给前端 CUSTOM 页面（`props.routeConfig`），不改代码就能调页面参数                      |
+| **按钮权限码**             | 表格增删改/自定义按钮的权限码，默认按表生成：`data:create:<tcid>`、`data:action:<tcid>:<value>`                       |
+| **表单配置**               | 字段级表单属性：`formSort`、`formVisible`、`formSpan`（24 栅格）、`rules`（正则/自定义校验）                          |
+| **校验器注册名**           | 自定义校验只存名字（如 `phone`），函数在前端 `components/table/validators.ts` 注册，避免把 JS 存库执行的风险          |
+| **页签（tags view）**      | 内容区顶部记录访问过的页面，可切换/关闭；首页固定不可关                                                               |

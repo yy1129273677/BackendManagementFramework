@@ -326,7 +326,7 @@ async function removeItem(item: any): Promise<void> {
 onMounted(loadTypes);
 </script>
 
-<style scoped>
+<style lang="less" scoped>
 .type-item {
   display: flex;
   align-items: center;

@@ -28,6 +28,20 @@
         </el-tag>
       </template>
     </Table>
+
+    <!-- 需求 002 第 3 条：路由上配的 JSON 配置会作为 props.routeConfig 注入到这里 -->
+    <div class="page-card" style="margin-top: 12px">
+      <h4 style="margin-top: 0">路由注入的 JSON 配置（props.routeConfig）</h4>
+      <p class="text-muted" style="margin-bottom: 8px">
+        在「路由管理」编辑这条 CUSTOM 路由，填一段 JSON 保存，刷新后下面就会显示出来——不用改代码。
+      </p>
+      <el-descriptions v-if="routeConfig" :column="1" border>
+        <el-descriptions-item v-for="(value, key) in routeConfig" :key="key" :label="String(key)">
+          {{ typeof value === "object" ? JSON.stringify(value) : value }}
+        </el-descriptions-item>
+      </el-descriptions>
+      <el-empty v-else description="这条路由还没有配置 JSON（为空不影响页面使用）" :image-size="60" />
+    </div>
   </div>
 </template>
 
@@ -35,10 +49,11 @@
 /**
  * 自定义页面 + 公用表格组件 的完整示例。
  *
- * 这个文件演示三件事：
+ * 这个文件演示四件事：
  *   1. 引入公用组件 <Table>，只传一个 TCID 就把整张表渲染出来
  *   2. 用 #action-<value> 插槽接管配置里的自定义按钮（value 就是配置里填的标识）
  *   3. 用 #col-<字段名> 插槽接管某一列的渲染（比如把状态渲染成彩色标签）
+ *   4. 用 props.routeConfig 接收「路由管理」里配的 JSON，实现不改代码调参数（需求 002 第 3 条）
  *
  * 你可以照着这个文件写自己的业务页面：
  *   复制一份 → 改 TCID → 删掉不需要的插槽 → 在路由管理里配一条 CUSTOM 路由指向它。
@@ -47,6 +62,14 @@ import { onMounted, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import Table from "@/components/table/index.vue";
 import { dictApi, tableDataApi } from "@/api";
+
+/**
+ * 路由注入的 JSON 配置。
+ *
+ * 来源：动态路由注册时 router/index.ts 把 route.config 作为 props 传进来。
+ * 所以页面不用 import 任何配置，父级（路由）说了算，改配置不用改代码。
+ */
+const props = withDefaults(defineProps<{ routeConfig?: any }>(), { routeConfig: null });
 
 /** 演示表格的 TCID（由 prisma/seed.ts 创建） */
 const DEMO_TCID = "TDEMOORDERS";

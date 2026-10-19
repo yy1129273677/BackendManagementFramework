@@ -1,5 +1,5 @@
 <template>
-  <div class="bmf-table">
+  <div class="bmf-table" :style="{ '--bmf-table-min-height': minHeight }">
     <!-- 配置加载失败：常见原因是 TCID 写错，或当前子系统里没有这张表 -->
     <el-alert v-if="loadError" :title="loadError" type="error" show-icon :closable="false" />
     <template v-else>
@@ -110,12 +110,15 @@
       </div>
 
       <!-- 数据表格 -->
+      <!-- 最小高度：数据少或空表时表格不至于塌成一条，页面高度更稳定；
+           传了 height（固定高度 + 内部滚动）时以 height 为准，不再压 min-height -->
       <el-table
         v-loading="loading || configLoading"
         :data="rows"
         border
         stripe
         :height="height || undefined"
+        :style="{ minHeight: height ? undefined : 'var(--bmf-table-min-height)' }"
         row-key="id"
       >
         <el-table-column
@@ -201,65 +204,70 @@
     <el-dialog
       v-model="dialogVisible"
       :title="dialogMode === 'create' ? `新增 - ${config?.name || ''}` : `编辑 - ${config?.name || ''}`"
-      width="560px"
+      width="720px"
       destroy-on-close
     >
+      <!-- 表单支持自定义栅格：字段配置里设置「所占列」（24 栅格制），24=整行、12=一半 -->
       <el-form :model="formModel" label-width="110px">
-        <el-form-item v-for="field in formFields" :key="field.name" :label="field.label" :required="field.required">
-          <!-- 下拉 -->
-          <el-select
-            v-if="field.options?.dict || field.options?.static || field.type === 'boolean'"
-            v-model="formModel[field.name]"
-            clearable
-            style="width: 100%"
-          >
-            <el-option
-              v-for="option in optionsFor(field)"
-              :key="String(option.value)"
-              :label="option.label"
-              :value="option.value"
-            />
-          </el-select>
+        <el-row :gutter="12">
+          <el-col v-for="field in formFields" :key="field.name" :span="field.formSpan || 24">
+            <el-form-item :label="field.label" :required="field.required">
+              <!-- 下拉 -->
+              <el-select
+                v-if="field.options?.dict || field.options?.static || field.type === 'boolean'"
+                v-model="formModel[field.name]"
+                clearable
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="option in optionsFor(field)"
+                  :key="String(option.value)"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
 
-          <!-- 数字 -->
-          <el-input-number
-            v-else-if="field.type === 'number' || field.type === 'integer'"
-            v-model="formModel[field.name]"
-            :precision="field.type === 'integer' ? 0 : 2"
-            :controls="false"
-            style="width: 100%"
-          />
+              <!-- 数字 -->
+              <el-input-number
+                v-else-if="field.type === 'number' || field.type === 'integer'"
+                v-model="formModel[field.name]"
+                :precision="field.type === 'integer' ? 0 : 2"
+                :controls="false"
+                style="width: 100%"
+              />
 
-          <!-- 日期 -->
-          <el-date-picker
-            v-else-if="field.type === 'date'"
-            v-model="formModel[field.name]"
-            type="date"
-            value-format="YYYY-MM-DD"
-            style="width: 100%"
-          />
+              <!-- 日期 -->
+              <el-date-picker
+                v-else-if="field.type === 'date'"
+                v-model="formModel[field.name]"
+                type="date"
+                value-format="YYYY-MM-DD"
+                style="width: 100%"
+              />
 
-          <!-- 日期时间 -->
-          <el-date-picker
-            v-else-if="field.type === 'datetime'"
-            v-model="formModel[field.name]"
-            type="datetime"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            style="width: 100%"
-          />
+              <!-- 日期时间 -->
+              <el-date-picker
+                v-else-if="field.type === 'datetime'"
+                v-model="formModel[field.name]"
+                type="datetime"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                style="width: 100%"
+              />
 
-          <!-- 多行文本 -->
-          <el-input
-            v-else-if="field.type === 'text'"
-            v-model="formModel[field.name]"
-            type="textarea"
-            :rows="3"
-            style="width: 100%"
-          />
+              <!-- 多行文本 -->
+              <el-input
+                v-else-if="field.type === 'text'"
+                v-model="formModel[field.name]"
+                type="textarea"
+                :rows="3"
+                style="width: 100%"
+              />
 
-          <!-- 单行文本 -->
-          <el-input v-else v-model="formModel[field.name]" clearable style="width: 100%" />
-        </el-form-item>
+              <!-- 单行文本 -->
+              <el-input v-else v-model="formModel[field.name]" clearable style="width: 100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
       </el-form>
 
       <template #footer>
@@ -296,6 +304,7 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { dictApi, tableDataApi } from "@/api";
 import type { CustomAction, TableConfig, TableField, TableRow } from "./types";
+import { runFieldRules } from "./validators";
 import {
   buildEmptyForm,
   buildQueryParams,
@@ -317,8 +326,10 @@ const props = withDefaults(
     showSearch?: boolean;
     /** 表格高度，长表格建议传，比如 "520px" */
     height?: string;
+    /** 表格最小高度（数据少/空表时不让表格塌下去），默认 320px；传了 height 时不生效 */
+    minHeight?: string;
   }>(),
-  { pageSize: 0, showSearch: true, height: "" },
+  { pageSize: 0, showSearch: true, height: "", minHeight: "320px" },
 );
 
 const emit = defineEmits<{
@@ -347,9 +358,20 @@ const submitting = ref(false);
 const formModel = reactive<Record<string, any>>({});
 
 // ---------------- 派生数据 ----------------
-const columns = computed(() => config.value?.columns || []);
-const searchFields = computed(() => config.value?.searchFields || []);
-const formFields = computed(() => (config.value?.fields || []).filter((field) => field.editable !== false));
+/** 列表列：按 listSort 排（老字段 sort 兜底） */
+const columns = computed(() =>
+  [...(config.value?.columns || [])].sort((a, b) => (a.listSort ?? a.sort ?? 0) - (b.listSort ?? b.sort ?? 0)),
+);
+/** 搜索项：按 searchSort 排（需求 002 第 5 条） */
+const searchFields = computed(() =>
+  [...(config.value?.searchFields || [])].sort((a, b) => (a.searchSort ?? 0) - (b.searchSort ?? 0)),
+);
+/** 表单项：可编辑 + 表单里显示，按 formSort 排 */
+const formFields = computed(() =>
+  (config.value?.fields || [])
+    .filter((field) => field.editable !== false && field.formVisible !== false)
+    .sort((a, b) => (a.formSort ?? a.listSort ?? 0) - (b.formSort ?? b.listSort ?? 0)),
+);
 const operations = computed(() => config.value?.operations || { create: false, update: false, delete: false });
 const customActions = computed(() => config.value?.customActions || []);
 
@@ -516,12 +538,21 @@ function openEdit(row: TableRow): void {
 }
 
 async function submitForm(): Promise<void> {
-  // 必填校验放在前端做是为了体验；后端同样会校验一次，不能只依赖前端
+  // 表单校验（需求 002 第 5 条）：
+  //   1. 必填   2. 正则   3. 自定义校验器（能拿到整个表单，做联动）
+  // 后端还会再校验一次，前端这层是为了体验。
   for (const field of formFields.value) {
-    if (!field.required) continue;
     const value = formModel[field.name];
-    if (value === "" || value === null || value === undefined) {
+    const isEmpty = value === "" || value === null || value === undefined;
+
+    if (field.required && isEmpty) {
       ElMessage.warning(`请填写「${field.label}」`);
+      return;
+    }
+
+    const ruleError = runFieldRules(field, value, formModel);
+    if (ruleError) {
+      ElMessage.warning(ruleError);
       return;
     }
   }
@@ -597,11 +628,24 @@ defineExpose({
 });
 </script>
 
-<style scoped>
+<style lang="less" scoped>
+@import "../../styles/variables.less";
+
 .bmf-table {
-  background: #fff;
-  border-radius: 6px;
+  background: @bg-white;
+  border-radius: @radius;
   padding: 16px;
+}
+
+/* 表格最小高度：由组件根节点的 CSS 变量控制（默认 320px，可用 minHeight 覆盖）。
+   el-table 本身只有 height / max-height，没有 min-height，所以这里用样式兜住。
+   空表时让「暂无数据」在最小高度区域里垂直居中，否则会贴在表头下面。 */
+.bmf-table :deep(.el-table) {
+  min-height: var(--bmf-table-min-height, 320px);
+}
+
+.bmf-table :deep(.el-table__empty-block) {
+  min-height: calc(var(--bmf-table-min-height, 320px) - 48px);
 }
 
 .search-form {
@@ -628,6 +672,6 @@ defineExpose({
 }
 
 .range-sep {
-  color: #909399;
+  color: @text-secondary;
 }
 </style>

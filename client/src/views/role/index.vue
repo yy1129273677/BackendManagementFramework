@@ -3,7 +3,9 @@
     <div class="toolbar">
       <div>
         <h3 style="margin: 0">角色管理</h3>
-        <span class="text-muted">当前系统：{{ auth.activeSystemCode || auth.user?.systemName }}</span>
+        <span class="text-muted">
+          当前系统：{{ auth.activeSystemCode || auth.user?.systemName }} ｜ 权限改成树形勾选：菜单 + 该菜单下表格的按钮
+        </span>
       </div>
       <el-button type="primary" @click="openCreate">新建角色</el-button>
     </div>
@@ -28,7 +30,7 @@
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialogVisible" :title="mode === 'create' ? '新建角色' : '编辑角色'" width="720px">
+    <el-dialog v-model="dialogVisible" :title="mode === 'create' ? '新建角色' : '编辑角色'" width="900px" top="4vh">
       <el-form :model="form" label-width="90px">
         <el-form-item label="角色编码" required>
           <el-input v-model="form.code" :disabled="mode === 'edit'" placeholder="大写字母开头，如 SALES_ADMIN" />
@@ -41,16 +43,35 @@
         </el-form-item>
 
         <el-form-item label="权限">
-          <div class="permission-box">
-            <div v-for="group in permissionGroups" :key="group" class="permission-group">
-              <div class="permission-group-title">{{ group }}</div>
-              <el-checkbox-group v-model="form.permissions">
-                <el-checkbox v-for="item in groupedPermissions[group] || []" :key="item.code" :value="item.code">
-                  {{ item.name }}
-                  <span class="text-muted">（{{ item.code }}）</span>
-                </el-checkbox>
-              </el-checkbox-group>
+          <div class="tree-box">
+            <div class="tree-toolbar">
+              <span class="text-muted">
+                勾选即可授权：菜单节点 = 能看到该菜单（仅「按角色控制」的菜单需要勾），按钮节点 = 能操作那张表的数据。
+                旧版全局「表格数据」权限已合并到各表格菜单下，不在这里重复显示（保存时会保留）。
+              </span>
+              <el-space>
+                <el-button link type="primary" size="small" @click="checkAll">全选可授权项</el-button>
+                <el-button link type="danger" size="small" @click="clearAll">清空</el-button>
+              </el-space>
             </div>
+
+            <el-tree
+              ref="treeRef"
+              :data="treeData"
+              node-key="key"
+              show-checkbox
+              default-expand-all
+              :props="treeProps"
+              class="perm-tree"
+              :empty-text="treeLoading ? '加载权限树…' : '当前系统还没有可配置的菜单'"
+            >
+              <template #default="{ data }">
+                <span class="tree-node">
+                  <span>{{ data.title }}</span>
+                  <span v-if="data.note" class="node-note">{{ data.note }}</span>
+                </span>
+              </template>
+            </el-tree>
           </div>
         </el-form-item>
       </el-form>
@@ -66,16 +87,22 @@
 /**
  * 角色管理。
  *
- * 角色的本质就是「一堆权限码」。用户绑定角色后：
- *   - 登录时权限码被签进 token
- *   - 后端守卫按权限码拦截接口
- *   - 前端按权限码决定菜单和按钮显不显示
+ * 需求 002 第 2 条：
+ *   原来权限是一排看不懂的权限码勾选框（data:create / route:read…）。
+ *   现在改成「权限树」：
+ *     - 菜单节点：当前子系统里真实存在的路由，勾选 = 能看到这个菜单
+ *     - 按钮节点：TABLE 路由下面挂这张表的「新增/修改/删除/自定义按钮」
+ *   这样管理员看到的是「订单管理 / 新增」这种看得懂的东西。
+ *
+ * 树是后端 GET /api/roles/permission-tree 算出来的，返回：
+ *   tree   —— 树结构
+ *   keyMap —— 节点 key → 权限码（同一个权限码可能挂在多个节点上，所以要映射）
  *
  * 注意：
- *   权限码清单必须和后端 ALL_PERMISSIONS 一致。
- *   这里从后端 /api/roles/permissions 拉，避免前后端两份清单写歪。
+ *   角色的 permissions 存的仍然是权限码数组，只是录入方式从「手填/平铺勾选」变成了「树里勾选」。
+ *   公开菜单（accessType=PUBLIC）和没配权限码的自定义按钮在树里是禁用态，勾不了。
  */
-import { computed, onMounted, reactive, ref } from "vue";
+import { nextTick, onMounted, reactive, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { roleApi } from "@/api";
 import { useAuthStore } from "@/stores/auth";
@@ -84,13 +111,17 @@ const auth = useAuthStore();
 
 const loading = ref(false);
 const list = ref<any[]>([]);
-const permissionList = ref<any[]>([]);
-const permissionGroups = ref<string[]>([]);
 
 const dialogVisible = ref(false);
 const mode = ref<"create" | "edit">("create");
 const editingId = ref("");
 const submitting = ref(false);
+
+const treeRef = ref<any>();
+const treeData = ref<any[]>([]);
+const treeLoading = ref(false);
+const keyMap = ref<Record<string, string>>({});
+const treeProps = { label: "title", children: "children", disabled: "disabled" };
 
 const form = reactive({
   code: "",
@@ -99,36 +130,69 @@ const form = reactive({
   permissions: [] as string[],
 });
 
-/** 按分组整理权限，页面上分栏展示，比一长条勾选框好用 */
-const groupedPermissions = computed(() => {
-  const map: Record<string, any[]> = {};
-  for (const item of permissionList.value) {
-    if (!map[item.group]) map[item.group] = [];
-    map[item.group].push(item);
-  }
-  return map;
-});
-
 async function load(): Promise<void> {
   loading.value = true;
   try {
-    const [roles, permissions] = await Promise.all([roleApi.list(), roleApi.permissions()]);
-    list.value = roles.list || [];
-    permissionList.value = permissions.list || [];
-    permissionGroups.value = permissions.groups || [];
+    const result = await roleApi.list();
+    list.value = result.list || [];
   } finally {
     loading.value = false;
   }
 }
 
-function openCreate(): void {
+/** 拉权限树（每次打开弹窗都重新拉，保证菜单/表格配置变动后是最新的） */
+async function loadTree(): Promise<void> {
+  treeLoading.value = true;
+  try {
+    const result = await roleApi.permissionTree();
+    treeData.value = result.tree || [];
+    keyMap.value = result.keyMap || {};
+  } catch {
+    treeData.value = [];
+    keyMap.value = {};
+  } finally {
+    treeLoading.value = false;
+  }
+}
+
+/** 权限码 → 节点 key（用来回显已勾选） */
+function permissionsToKeys(permissions: string[]): string[] {
+  const wanted = new Set(permissions || []);
+  return Object.entries(keyMap.value)
+    .filter(([, code]) => code && wanted.has(code))
+    .map(([key]) => key);
+}
+
+/** 权限码 → 节点 key（用来回显已勾选） */
+
+/** 遍历树，收集「可勾选」且带权限码的节点 key */
+function collectCheckableKeys(nodes: any[], out: string[] = []): string[] {
+  for (const node of nodes || []) {
+    if (!node.disabled && node.code) out.push(node.key);
+    if (node.children) collectCheckableKeys(node.children, out);
+  }
+  return out;
+}
+
+function checkAll(): void {
+  treeRef.value?.setCheckedKeys(collectCheckableKeys(treeData.value), false);
+}
+
+function clearAll(): void {
+  treeRef.value?.setCheckedKeys([], false);
+}
+
+async function openCreate(): Promise<void> {
   mode.value = "create";
   editingId.value = "";
   Object.assign(form, { code: "", name: "", remark: "", permissions: [] });
   dialogVisible.value = true;
+  await loadTree();
+  await nextTick();
+  treeRef.value?.setCheckedKeys([], false);
 }
 
-function openEdit(row: any): void {
+async function openEdit(row: any): Promise<void> {
   mode.value = "edit";
   editingId.value = row.id;
   Object.assign(form, {
@@ -138,6 +202,9 @@ function openEdit(row: any): void {
     permissions: [...(row.permissions || [])],
   });
   dialogVisible.value = true;
+  await loadTree();
+  await nextTick();
+  treeRef.value?.setCheckedKeys(permissionsToKeys(form.permissions), false);
 }
 
 async function submit(): Promise<void> {
@@ -150,6 +217,16 @@ async function submit(): Promise<void> {
     return;
   }
 
+  // 从树上取勾选结果，再映射回权限码（去重：同一权限码可能挂在多个节点上）
+  const checkedKeys: string[] = treeRef.value?.getCheckedKeys() || [];
+  const checkedCodes = [...new Set(checkedKeys.map((key) => keyMap.value[key]).filter(Boolean))];
+
+  // 树上看不到的旧权限码要保留：比如老表格用的全局 data:create 已经从树里移除了。
+  // 不保留的话，管理员打开角色点一下保存，就会把这些老权限静默删掉，老表的按钮直接失效。
+  const visibleCodes = new Set(Object.values(keyMap.value));
+  const legacyCodes = form.permissions.filter((code) => !visibleCodes.has(code));
+  const permissions = [...new Set([...legacyCodes, ...checkedCodes])];
+
   submitting.value = true;
   try {
     if (mode.value === "create") {
@@ -157,14 +234,14 @@ async function submit(): Promise<void> {
         code: form.code.trim(),
         name: form.name.trim(),
         remark: form.remark,
-        permissions: form.permissions,
+        permissions,
       });
       ElMessage.success("角色已创建");
     } else {
       await roleApi.update(editingId.value, {
         name: form.name.trim(),
         remark: form.remark,
-        permissions: form.permissions,
+        permissions,
       });
       ElMessage.success("修改成功。已登录的用户需要重新登录才会生效");
     }
@@ -177,9 +254,7 @@ async function submit(): Promise<void> {
 
 async function remove(row: any): Promise<void> {
   try {
-    await ElMessageBox.confirm(`确定删除角色「${row.name}」吗？`, "提示", {
-      type: "warning",
-    });
+    await ElMessageBox.confirm(`确定删除角色「${row.name}」吗？`, "提示", { type: "warning" });
   } catch {
     return;
   }
@@ -191,28 +266,38 @@ async function remove(row: any): Promise<void> {
 onMounted(load);
 </script>
 
-<style scoped>
-.permission-box {
-  max-height: 420px;
-  overflow: auto;
+<style lang="less" scoped>
+.tree-box {
+  width: 100%;
   border: 1px solid #ebeef5;
   border-radius: 4px;
-  padding: 8px 12px;
-  width: 100%;
+  overflow: hidden;
 }
 
-.permission-group {
-  padding: 6px 0;
+.tree-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: #fafafa;
   border-bottom: 1px dashed #ebeef5;
 }
 
-.permission-group:last-child {
-  border-bottom: none;
+.perm-tree {
+  max-height: 420px;
+  overflow: auto;
+  padding: 6px 8px;
 }
 
-.permission-group-title {
-  font-weight: 600;
-  margin-bottom: 6px;
-  color: #303133;
+.tree-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.node-note {
+  font-size: 11px;
+  color: #b1b3b8;
 }
 </style>

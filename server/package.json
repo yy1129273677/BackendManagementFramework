@@ -14,6 +14,8 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:migrate:diff": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script",
     "seed": "ts-node -T prisma/seed.ts",
+    "migrate:002": "ts-node -T prisma/migrate-002-permissions.ts",
+    "migrate:002:dry": "ts-node -T prisma/migrate-002-permissions.ts --dry-run",
     "pretest": "prisma generate",
     "test": "jest --runInBand"
   },

@@ -61,6 +61,8 @@ export const userApi = {
 export const roleApi = {
   list: () => http<{ list: any[] }>({ url: "/roles" }),
   permissions: () => http<{ list: any[]; groups: string[] }>({ url: "/roles/permissions" }),
+  /** 权限树：菜单 + 表格按钮（需求 002 第 2 条） */
+  permissionTree: () => http<{ tree: any[]; keyMap: Record<string, string> }>({ url: "/roles/permission-tree" }),
   create: (data: any) => http({ url: "/roles", method: "post", data }),
   update: (id: string, data: any) => http({ url: `/roles/${id}`, method: "patch", data }),
   remove: (id: string) => http({ url: `/roles/${id}`, method: "delete" }),
@@ -109,4 +111,14 @@ export const tableDataApi = {
 /** 健康检查 */
 export const healthApi = {
   check: () => http<any>({ url: "/health" }),
+};
+
+/**
+ * 首页统计（ECharts 数据来源）。
+ *   overview：主系统首页的平台总览（仅超管，普通用户调用会 403）
+ *   system  ：子系统首页，统计当前子系统
+ */
+export const statsApi = {
+  overview: () => http<any>({ url: "/stats/overview" }),
+  system: () => http<any>({ url: "/stats/system" }),
 };

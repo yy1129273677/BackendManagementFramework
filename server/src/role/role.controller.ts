@@ -28,6 +28,16 @@ export class RoleController {
     return this.roleService.permissions();
   }
 
+  /**
+   * 权限树（需求 002）：菜单 + 表格按钮组成一棵树，勾选即授权。
+   * 注意要放在 :id 之类的动态路由之前，否则 permission-tree 会被当成 id。
+   */
+  @RequirePermissions("role:read")
+  @Get("permission-tree")
+  permissionTree(@SystemId() systemId: string) {
+    return this.roleService.permissionTree(systemId);
+  }
+
   @RequirePermissions("role:create")
   @Post()
   create(@SystemId() systemId: string, @Body() dto: CreateRoleDto) {

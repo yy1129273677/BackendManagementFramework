@@ -7,6 +7,7 @@ import { CreateTableConfigDto, UpdateTableConfigDto } from "./table-config.dto";
 import { generateTcid } from "./tcid.generator";
 import {
   CustomAction,
+  defaultOperationsForTcid,
   normalizeCustomActions,
   normalizeFields,
   normalizeOperations,
@@ -100,7 +101,6 @@ export class TableConfigService {
     // 字段校验失败是「用户填错了」，不是服务器错误 → 必须转成 400。
     // normalizeFields 抛的是普通 Error（纯函数方便单测），这里统一翻译成 HTTP 400。
     const fields = this.normalizeOrThrow(() => normalizeFields(dto.fields));
-    const operations = normalizeOperations(dto.operations);
     const customActions = this.normalizeOrThrow(() => normalizeCustomActions(dto.customActions));
     const searchMode = this.normalizeSearchMode(dto.searchMode);
 
@@ -113,6 +113,9 @@ export class TableConfigService {
       if (!exists) break;
       tcid = generateTcid();
     }
+
+    // 操作权限码默认按 TCID 生成（data:create:<tcid>），权限树里才能精确到「哪张表的哪个按钮」
+    const operations = dto.operations ? normalizeOperations(dto.operations) : defaultOperationsForTcid(tcid);
 
     const physicalTable = `biz_${tcid.toLowerCase()}`;
 

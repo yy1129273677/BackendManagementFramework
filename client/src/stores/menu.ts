@@ -21,6 +21,10 @@ export interface DynamicRouteItem {
   sort?: number;
   visible?: boolean;
   permissionCode?: string | null;
+  /** 访问控制：PUBLIC / ROLE（需求 002 第 2 条） */
+  accessType?: string | null;
+  /** 注入给页面的 JSON 配置，自定义页面通过 props.routeConfig 拿到（需求 002 第 3 条） */
+  config?: any;
 }
 
 export const useMenuStore = defineStore("menu", {

@@ -12,27 +12,46 @@
     </div>
 
     <el-table v-loading="loading" :data="list" border stripe>
-      <el-table-column prop="title" label="菜单名称" width="160" />
-      <el-table-column prop="path" label="路径" width="180">
-        <template #default="{ row }"
-          ><code>{{ row.path }}</code></template
-        >
+      <el-table-column label="菜单名称" width="150">
+        <template #default="{ row }">
+          <el-space :size="6">
+            <el-icon v-if="row.icon">
+              <component :is="row.icon" />
+            </el-icon>
+            <span>{{ row.title }}</span>
+          </el-space>
+        </template>
       </el-table-column>
-      <el-table-column label="类型" width="110">
+      <el-table-column prop="path" label="路径" width="170">
+        <template #default="{ row }">
+          <code>{{ row.path }}</code>
+        </template>
+      </el-table-column>
+      <el-table-column label="类型" width="90">
         <template #default="{ row }">
           <el-tag :type="row.type === 'TABLE' ? 'success' : 'warning'" size="small">
             {{ row.type === "TABLE" ? "表格" : "自定义" }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="绑定内容" min-width="220">
+      <el-table-column label="绑定内容" min-width="190">
         <template #default="{ row }">
           <code v-if="row.type === 'TABLE'">{{ row.tcid }}</code>
           <code v-else>{{ row.componentPath }}</code>
         </template>
       </el-table-column>
-      <el-table-column prop="permissionCode" label="权限码" width="140">
-        <template #default="{ row }">{{ row.permissionCode || "（登录即可见）" }}</template>
+      <el-table-column label="访问控制" width="110">
+        <template #default="{ row }">
+          <el-tag :type="row.accessType === 'ROLE' ? 'warning' : 'info'" size="small">
+            {{ row.accessType === "ROLE" ? "按角色" : "公开" }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="JSON 配置" width="100">
+        <template #default="{ row }">
+          <el-tag v-if="row.config" type="success" size="small">已配置</el-tag>
+          <span v-else class="text-muted">—</span>
+        </template>
       </el-table-column>
       <el-table-column label="显示" width="80">
         <template #default="{ row }">
@@ -48,7 +67,7 @@
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialogVisible" :title="mode === 'create' ? '新建路由' : '编辑路由'" width="640px">
+    <el-dialog v-model="dialogVisible" :title="mode === 'create' ? '新建路由' : '编辑路由'" width="720px" top="5vh">
       <el-form :model="form" label-width="120px">
         <el-form-item label="菜单名称" required>
           <el-input v-model="form.title" placeholder="如：订单管理" />
@@ -83,15 +102,46 @@
         </el-form-item>
 
         <el-form-item label="图标">
-          <el-input v-model="form.icon" placeholder="Element Plus 图标名，如 List / Grid / Menu" />
+          <IconPicker v-model="form.icon" />
         </el-form-item>
+
         <el-form-item label="排序">
           <el-input-number v-model="form.sort" :min="0" :controls="false" />
         </el-form-item>
-        <el-form-item label="访问权限码">
-          <el-input v-model="form.permissionCode" placeholder="留空 = 登录即可见；如 data:read" />
-          <div class="text-muted">填了之后，没有这个权限的用户看不到这条菜单。</div>
+
+        <el-form-item label="访问控制">
+          <el-radio-group v-model="form.accessType">
+            <el-radio value="PUBLIC">公开（登录即可见）</el-radio>
+            <el-radio value="ROLE">按角色（在角色权限树里勾选）</el-radio>
+          </el-radio-group>
+          <div class="text-muted">
+            选「按角色」后，去「角色管理 → 编辑角色 → 权限树」勾上这个菜单，对应角色才能看到。 不再需要手填权限码。
+          </div>
         </el-form-item>
+
+        <el-form-item label="JSON 配置">
+          <div style="width: 100%">
+            <el-input
+              v-model="form.configText"
+              type="textarea"
+              :rows="6"
+              placeholder='{"title": "订单中心", "pageSize": 50}'
+              spellcheck="false"
+            />
+            <div class="config-actions">
+              <span class="text-muted">
+                这个 JSON 会作为 props 注入前端页面：自定义页面写
+                <code>defineProps&lt;{ routeConfig?: any }&gt;()</code>
+                就能拿到，不用改代码就能调参数。
+              </span>
+              <el-space>
+                <el-button link type="primary" size="small" @click="formatConfig">格式化</el-button>
+                <el-button link type="danger" size="small" @click="form.configText = ''">清空</el-button>
+              </el-space>
+            </div>
+          </div>
+        </el-form-item>
+
         <el-form-item label="是否显示">
           <el-switch v-model="form.visible" active-text="显示" inactive-text="隐藏" />
         </el-form-item>
@@ -108,16 +158,17 @@
 /**
  * 路由（菜单）管理。
  *
- * 两种路由类型是本系统「快速交付」的关键：
- *   CUSTOM —— 指向一个手写 vue 文件的路径（如 examples/demo-table.vue）
- *   TABLE  —— 指向一个 TCID，页面自动渲染成配置出来的表格
- *
- * 保存后刷新页面，左侧菜单就会出现这一条。
+ * 需求 002 涉及三处：
+ *   1. 图标选择改成弹层平铺网格（IconPicker），一行多个图标、直接显示图形
+ *   2. 去掉手填「访问权限码」，改成「访问控制：公开 / 按角色」——
+ *      按角色的菜单在「角色管理 → 权限树」里勾选，权限码 menu:<routeId> 由系统生成
+ *   3. 新增 JSON 配置，注入给前端页面（自定义页面通过 props.routeConfig 接收）
  */
 import { onMounted, reactive, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { routeApi, tableConfigApi } from "@/api";
 import { useAuthStore } from "@/stores/auth";
+import IconPicker from "@/components/IconPicker/index.vue";
 
 const auth = useAuthStore();
 
@@ -139,7 +190,8 @@ const form = reactive({
   icon: "Menu",
   sort: 0,
   visible: true,
-  permissionCode: "",
+  accessType: "PUBLIC" as "PUBLIC" | "ROLE",
+  configText: "",
 });
 
 async function load(): Promise<void> {
@@ -153,9 +205,7 @@ async function load(): Promise<void> {
   }
 }
 
-function openCreate(): void {
-  mode.value = "create";
-  editingId.value = "";
+function resetForm(): void {
   Object.assign(form, {
     title: "",
     path: "",
@@ -165,8 +215,15 @@ function openCreate(): void {
     icon: "Menu",
     sort: 0,
     visible: true,
-    permissionCode: "",
+    accessType: "PUBLIC",
+    configText: "",
   });
+}
+
+function openCreate(): void {
+  mode.value = "create";
+  editingId.value = "";
+  resetForm();
   dialogVisible.value = true;
 }
 
@@ -182,9 +239,22 @@ function openEdit(row: any): void {
     icon: row.icon || "Menu",
     sort: row.sort || 0,
     visible: row.visible,
-    permissionCode: row.permissionCode || "",
+    accessType: row.accessType === "ROLE" ? "ROLE" : "PUBLIC",
+    configText: row.config ? JSON.stringify(row.config, null, 2) : "",
   });
   dialogVisible.value = true;
+}
+
+/** 把 JSON 配置格式化一下，方便人看 */
+function formatConfig(): void {
+  const text = form.configText.trim();
+  if (!text) return;
+  try {
+    form.configText = JSON.stringify(JSON.parse(text), null, 2);
+    ElMessage.success("已格式化");
+  } catch {
+    ElMessage.error("JSON 格式不正确，无法格式化");
+  }
 }
 
 async function submit(): Promise<void> {
@@ -205,6 +275,17 @@ async function submit(): Promise<void> {
     return;
   }
 
+  // JSON 配置：空 = 不配置；有内容必须能解析（后端也会再校验一次）
+  let config: any = null;
+  if (form.configText.trim()) {
+    try {
+      config = JSON.parse(form.configText);
+    } catch {
+      ElMessage.error("JSON 配置不是合法的 JSON，请检查引号和逗号");
+      return;
+    }
+  }
+
   const payload = {
     title: form.title.trim(),
     path: form.path.trim(),
@@ -214,7 +295,8 @@ async function submit(): Promise<void> {
     icon: form.icon || null,
     sort: Number(form.sort) || 0,
     visible: form.visible,
-    permissionCode: form.permissionCode || null,
+    accessType: form.accessType,
+    config,
   };
 
   submitting.value = true;
@@ -248,3 +330,19 @@ async function remove(row: any): Promise<void> {
 
 onMounted(load);
 </script>
+
+<style lang="less" scoped>
+.config-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+code {
+  background: #f5f7fa;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+</style>

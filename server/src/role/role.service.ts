@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { ALL_PERMISSIONS, SUPER_ROLE_CODE } from "../common/constants";
 import { PrismaService } from "../prisma/prisma.service";
+import { buildPermissionTree } from "./permission-tree";
 import { CreateRoleDto, UpdateRoleDto } from "./role.dto";
 
 /**
@@ -23,12 +24,50 @@ export class RoleService {
     return { list };
   }
 
-  /** 可分配的权限码清单（前端角色编辑页用来渲染勾选框） */
+  /** 可分配的权限码清单（老接口，保留给需要平铺列表的场景） */
   permissions() {
     return {
       list: ALL_PERMISSIONS,
       groups: [...new Set(ALL_PERMISSIONS.map((item) => item.group))],
     };
+  }
+
+  /**
+   * 权限树（角色编辑页用它替代原来那一排看不懂的权限码勾选框）。
+   *
+   * 树的结构：
+   *   系统功能 —— 子系统/用户/角色/字典/表格配置等管理能力
+   *   菜单与按钮 —— 当前子系统的真实路由；TABLE 路由下面挂这张表的按钮权限
+   *
+   * 返回 keyMap：el-tree 勾选的是节点 key，保存时要按 keyMap 映射回权限码
+   * （同一个权限码可能出现在多个节点上，所以 key 必须唯一）。
+   */
+  async permissionTree(systemId: string) {
+    const [routes, tableConfigs] = await Promise.all([
+      this.prisma.route.findMany({
+        where: { systemId },
+        orderBy: [{ sort: "asc" }, { title: "asc" }],
+        select: {
+          id: true,
+          parentId: true,
+          title: true,
+          type: true,
+          tcid: true,
+          sort: true,
+          accessType: true,
+        },
+      }),
+      this.prisma.tableConfig.findMany({
+        where: { systemId },
+        select: { tcid: true, name: true, operations: true, customActions: true },
+      }),
+    ]);
+
+    return buildPermissionTree({
+      routes: routes as any,
+      tableConfigs: tableConfigs as any,
+      functions: ALL_PERMISSIONS,
+    });
   }
 
   /** 新建角色 */
@@ -95,12 +134,23 @@ export class RoleService {
   }
 
   /**
-   * 过滤掉不在白名单里的权限码。
-   * 目的：防止前端传 'root' 之类的假权限码进数据库，导致后面判断口径混乱。
+   * 规范化权限码数组。
+   *
+   * 为什么不再用「固定白名单」：
+   *   需求 002 之后权限码是动态生成的，不止 ALL_PERMISSIONS 里那几个：
+   *     - 菜单权限：menu:<routeId>
+   *     - 表格按钮：data:create:<tcid> / data:action:<tcid>:<value>
+   *   固定白名单会把这些全部过滤掉（踩过一次：角色保存后权限为空，菜单和按钮都不生效）。
+   *
+   * 现在改成「格式校验」：只允许字母开头、字母数字下划线冒号短横线，长度有限制。
+   * 这样既能挡住空格/引号这类脏数据，又不会误杀动态权限码。
    */
   private normalizePermissions(input?: string[]): string[] {
     if (!Array.isArray(input)) return [];
-    const allowed = new Set(ALL_PERMISSIONS.map((item) => item.code));
-    return [...new Set(input.filter((code) => typeof code === "string" && allowed.has(code)))];
+
+    const allowedPattern = /^[A-Za-z][A-Za-z0-9_:-]{0,127}$/;
+    return [
+      ...new Set(input.filter((code) => typeof code === "string" && (code === "*" || allowedPattern.test(code)))),
+    ];
   }
 }

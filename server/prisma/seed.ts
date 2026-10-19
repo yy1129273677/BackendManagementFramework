@@ -21,7 +21,11 @@ import { PrismaClient } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
 import { DdlService } from "../src/table-config/ddl.service";
 import { PrismaService } from "../src/prisma/prisma.service";
-import { normalizeCustomActions, normalizeFields, normalizeOperations } from "../src/table-config/table-field.types";
+import {
+  defaultOperationsForTcid,
+  normalizeCustomActions,
+  normalizeFields,
+} from "../src/table-config/table-field.types";
 
 const prisma = new PrismaClient();
 const ddl = new DdlService(prisma as unknown as PrismaService);
@@ -115,9 +119,10 @@ async function main() {
         "table:update",
         "table:delete",
         "data:read",
-        "data:create",
-        "data:update",
-        "data:delete",
+        // 表格按钮权限按 TCID 隔离（需求 002 之后的新格式）
+        `data:create:${DEMO_TCID}`,
+        `data:update:${DEMO_TCID}`,
+        `data:delete:${DEMO_TCID}`,
       ],
       remark: "演示子系统的默认管理员",
     },
@@ -229,7 +234,8 @@ async function main() {
     {
       label: "标记发货",
       value: "ship",
-      permission: "data:update",
+      // 自定义按钮也按 TCID 授权，避免和「修改」共用全局码造成权限树里看起来重复
+      permission: `data:update:${DEMO_TCID}`,
       type: "primary",
     },
     { label: "查看详情", value: "detail", type: "default" },
@@ -242,7 +248,7 @@ async function main() {
     update: {
       name: "订单列表",
       fields: fields as any,
-      operations: normalizeOperations(null) as any,
+      operations: defaultOperationsForTcid(DEMO_TCID) as any,
       customActions: customActions as any,
     },
     create: {
@@ -253,7 +259,7 @@ async function main() {
       physicalTable: `biz_${DEMO_TCID.toLowerCase()}`,
       fields: fields as any,
       searchMode: "AND",
-      operations: normalizeOperations(null) as any,
+      operations: defaultOperationsForTcid(DEMO_TCID) as any,
       customActions: customActions as any,
       pageSize: 10,
       createdBy: superUser.id,

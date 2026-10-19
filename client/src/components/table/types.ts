@@ -24,6 +24,16 @@ export type SearchOp =
   | "isNull"
   | "notNull";
 
+/** 表单校验规则 */
+export interface FormFieldRules {
+  /** 正则表达式（字符串形式） */
+  pattern?: string;
+  /** 校验失败的提示文案 */
+  message?: string;
+  /** 自定义校验器名字（在 validators.ts 里注册） */
+  validator?: string;
+}
+
 /** 字段定义（表格列 / 表单项 / 搜索项都从它来） */
 export interface TableField {
   name: string;
@@ -42,6 +52,18 @@ export interface TableField {
     static?: Array<{ label: string; value: string }>;
   };
   sort?: number;
+  /** 列表显示排序（小的在前） */
+  listSort?: number;
+  /** 搜索栏排序 */
+  searchSort?: number;
+  /** 表单排序（默认与 listSort 相同） */
+  formSort?: number;
+  /** 是否在表单里显示 */
+  formVisible?: boolean;
+  /** 表单占宽（24 栅格制） */
+  formSpan?: number;
+  /** 校验规则 */
+  rules?: FormFieldRules;
 }
 
 /** 表格行数据：物理表的列 + 固定列 */

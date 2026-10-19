@@ -1,0 +1,42 @@
+// =============================================================================
+// 全局 Less 变量
+//
+// 用法：在 SFC 的 <style lang="less" scoped> 里
+//   @import "../styles/variables.less";   // 路径按文件位置调整
+// 然后直接用变量（如 color: @primary;）。
+//
+// 约定：颜色/圆角/间距这类会重复出现的值统一放这里，
+// 组件里不要再写死 #409eff 之类，改主题只改这一个文件。
+// =============================================================================
+
+// ---------- 主题色 ----------
+@primary: #409eff;
+@success: #67c23a;
+@warning: #e6a23c;
+@danger: #f56c6c;
+
+// ---------- 文字 ----------
+@text-main: #303133;
+@text-regular: #606266;
+@text-secondary: #909399;
+@text-placeholder: #b1b3b8;
+
+// ---------- 边框 / 背景 ----------
+@border: #dcdfe6;
+@border-light: #ebeef5;
+@bg-page: #f5f7fa;
+@bg-white: #ffffff;
+
+// ---------- 侧边栏（深色） ----------
+@sidebar-bg: #1f2d3d;
+@sidebar-bg-deep: #2d4a63;
+@sidebar-active: #263445;
+@sidebar-text: #c0ccda;
+@sidebar-text-muted: #8a9bb0;
+
+// ---------- 圆角 / 阴影 ----------
+@radius-sm: 4px;
+@radius: 6px;
+@radius-lg: 10px;
+@shadow-card: 0 1px 4px rgba(0, 0, 0, 0.04);
+@shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.25);

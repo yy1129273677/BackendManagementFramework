@@ -19,13 +19,13 @@
 
 ## 2. 技术栈（不要擅自替换）
 
-| 端   | 技术                                                              | 位置               |
-| ---- | ----------------------------------------------------------------- | ------------------ |
-| 前端 | Vue 3 + Vite 5 + Element Plus + Pinia + vue-router（hash）+ axios | `client/`          |
-| 后端 | NestJS 11 + Prisma 6 + PostgreSQL 16 + pgvector                   | `server/`          |
-| 认证 | JWT（Bearer token），bcrypt 存密码                                | `server/src/auth/` |
-| 测试 | 后端 jest（`--runInBand`）、前端 vitest                           | 各自 `*.spec.ts`   |
-| 部署 | Docker Compose（db + server + web/Nginx）                         | 根目录             |
+| 端   | 技术                                                                        | 位置               |
+| ---- | --------------------------------------------------------------------------- | ------------------ |
+| 前端 | Vue 3 + Vite 5 + Element Plus + Pinia + vue-router（hash）+ axios + ECharts | `client/`          |
+| 后端 | NestJS 11 + Prisma 6 + PostgreSQL 16 + pgvector                             | `server/`          |
+| 认证 | JWT（Bearer token），bcrypt 存密码                                          | `server/src/auth/` |
+| 测试 | 后端 jest（`--runInBand`）、前端 vitest                                     | 各自 `*.spec.ts`   |
+| 部署 | Docker Compose（db + server + web/Nginx）                                   | 根目录             |
 
 **不引入**：大型 UI 框架替代 Element Plus、ORM 替代 Prisma、状态管理替代 Pinia、
 monorepo 工具链（pnpm workspace 之类）。当前是「两个独立 npm 包」，不是 workspace。
@@ -47,8 +47,10 @@ npm install
 npx prisma migrate deploy        # 建表
 npm run seed                     # 造超管 + demo 数据
 npm run start:dev                # 开发，端口 3000
-npm test                         # 47 个单测，不需要数据库
+npm test                         # 84 个单测，不需要数据库
 npm run build                    # prisma generate + nest build
+npm run migrate:002:dry          # 权限码迁移预览（老表全局码 → 按 TCID，幂等）
+npm run migrate:002              # 执行迁移（单事务，失败回滚）
 
 # ---------- 前端 ----------
 cd client
@@ -203,6 +205,56 @@ docs/
 4. **根目录的 `package.json` 只是开发期工具**，只装 Prettier，不进 Docker 镜像，
    也不装任何业务依赖。`client/` 和 `server/` 各自还是独立的 npm 包，不要动。
 
+5. **SFC 块顺序是硬约束：`<template>` → `<script setup>` → `<style>`**。
+   新写/改写的组件不许把 script 放前面。理由：先看结构再看逻辑，和项目现有 16 个组件保持一致。
+   检查命令（在 `client/` 下）：
+
+   ```powershell
+   Get-ChildItem -Recurse -File -Filter *.vue src | ForEach-Object {
+     $l = Get-Content $_.FullName
+     $t = ($l | Select-String '^<template' | Select-Object -First 1).LineNumber
+     $s = ($l | Select-String '^<script'   | Select-Object -First 1).LineNumber
+     if ($t -gt $s) { "顺序不对: " + $_.Name }
+   }
+   ```
+
+6. **样式一律用 Less**：`<style lang="less" scoped>`（`less` 已作为 devDependency 装上）。
+   颜色 / 圆角 / 阴影等共用值统一放 `client/src/styles/variables.less`，
+   组件里 `@import "../styles/variables.less";` 之后用变量（`@primary`、`@border-light`…），
+   不要在组件里写死十六进制。全局样式文件是 `client/src/styles/index.less`。
+
 > `.prettierignore` 里排除的是 Prettier 解析不了或本来就不该动的东西
 > （`node_modules`、`dist`、锁文件、`*.sql`、`*.ps1`、`nginx.conf`、Docker 相关文件）；
 > `.editorconfig` 让别的编辑器（IDEA / WebStorm）也用同一套基础格式。
+
+---
+
+## 9. 需求 002 之后的约定（重要）
+
+1. **权限码是动态的**：`menu:<routeId>`、`data:create:<tcid>`、`data:action:<tcid>:<value>`。
+   **不要再用「`ALL_PERMISSIONS` 固定白名单」过滤角色权限**——踩过坑：新权限码被静默丢掉，
+   表现为"勾了权限却不生效"。角色权限只做格式校验（`role.service.normalizePermissions`）。
+
+2. **权限树是唯一录入入口**：新增菜单/按钮权限节点要改
+   `server/src/role/permission-tree.ts`，并补 `permission-tree.spec.ts`；
+   前端角色页直接用后端返回的 `{tree, keyMap}`，不要自己拼权限码。
+   树的形状：系统功能按 `ALL_PERMISSIONS.group` 二级分组；**全局 `data:*`（表格数据）不进树**，
+   按钮权限只在各自表格下出现（老表用全局码时节点带说明），避免"看起来重复"。
+
+3. **老数据迁移用脚本，不用 SQL 硬改**：全局 `data:create/update/delete` → `data:<op>:<tcid>`
+   的迁移逻辑在 `server/src/role/permission-migration.ts`（纯函数 + 单测），
+   入口 `npm run migrate:002[:dry]`（幂等、dry-run、单事务）。改迁移规则要同步补单测，
+   并且**新数据一律走新格式**（`normalizeFields` / `defaultOperationsForTcid`），别再产生全局码。
+
+4. **路由 `config` 只注入 CUSTOM 页面**（`props.routeConfig`），表格页面不注入。
+   注入逻辑在 `client/src/router/index.ts` 的 `setupDynamicRoutes`。
+
+5. **表格字段的表单属性**：`listSort / searchSort / formSort / formVisible / formSpan / rules`，
+   后端 `normalizeFields` 负责默认值和校准（`formSpan` 限制 1~24、正则必须能编译），
+   前端 `<Table>` 负责按它排序、24 栅格布局、校验。
+
+6. **校验规则只存「正则字符串 + 校验器名字」**，**禁止把 JS 代码存数据库执行**；
+   自定义校验函数写在 `client/src/components/table/validators.ts`，用 `registerValidator` 注册。
+
+7. **需求文档流程**：需求先出「整理版」（`docs/requirements/00X-...-整理版.md`，含我的判断与待确认点），
+   确认后再开发、回填实现对照，并删掉原始需求文件。

@@ -36,10 +36,12 @@ export class RouteService {
   /**
    * 当前用户能看到的路由（前端登录后生成菜单用）。
    *
-   * 过滤规则：
+   * 过滤规则（按顺序）：
    *   1. visible = false 的不返回
-   *   2. 配了 permissionCode 的，用户没这个权限就不返回
-   *   3. 超管不过滤
+   *   2. 超管不过滤
+   *   3. accessType = ROLE 的菜单：用户必须有 `menu:<routeId>` 权限
+   *      （这个权限码由「角色管理 → 权限树」勾选产生，不需要手填）
+   *   4. 历史字段 permissionCode 如果配了，仍然要求具备该权限码（兼容老数据）
    */
   async myRoutes(user: JwtUser, systemId: string) {
     const all = await this.prisma.route.findMany({
@@ -48,8 +50,19 @@ export class RouteService {
     });
 
     const list = all.filter((route) => {
-      if (!route.permissionCode) return true;
-      return hasPermission(user.permissions, user.isSuper, route.permissionCode);
+      if (user.isSuper) return true;
+
+      // 新逻辑：按角色勾选的菜单权限
+      if (route.accessType === "ROLE") {
+        if (!hasPermission(user.permissions, false, `menu:${route.id}`)) return false;
+      }
+
+      // 兼容逻辑：老数据里手填的权限码
+      if (route.permissionCode && !hasPermission(user.permissions, false, route.permissionCode)) {
+        return false;
+      }
+
+      return true;
     });
 
     return { list };
@@ -151,6 +164,30 @@ export class RouteService {
       if (!parent) throw new BadRequestException("父级菜单不存在");
     }
 
+    // 访问控制：默认 PUBLIC（登录即可见）；ROLE 表示必须在角色权限树里勾选该菜单
+    const accessType = String(dto.accessType || "PUBLIC").toUpperCase() === "ROLE" ? "ROLE" : "PUBLIC";
+
+    // 注入给前端的 JSON 配置：允许传对象，也允许传 JSON 字符串（后台表单里是文本域）
+    let config: any = null;
+    const rawConfig = dto.config;
+    if (rawConfig !== undefined && rawConfig !== null && rawConfig !== "") {
+      if (typeof rawConfig === "string") {
+        try {
+          config = JSON.parse(rawConfig);
+        } catch {
+          throw new BadRequestException("JSON 配置不是合法的 JSON，请检查引号和逗号");
+        }
+      } else if (typeof rawConfig === "object") {
+        config = rawConfig;
+      } else {
+        throw new BadRequestException("JSON 配置必须是对象、数组或 JSON 字符串");
+      }
+
+      if (JSON.stringify(config).length > 20000) {
+        throw new BadRequestException("JSON 配置太大了（上限 20KB），请拆分");
+      }
+    }
+
     return {
       title,
       path,
@@ -162,6 +199,8 @@ export class RouteService {
       sort: Number(dto.sort) || 0,
       visible: dto.visible === undefined ? true : Boolean(dto.visible),
       permissionCode: dto.permissionCode || null,
+      accessType,
+      config,
     };
   }
 }

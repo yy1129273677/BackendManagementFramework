@@ -57,6 +57,35 @@ export interface TableField {
   };
   /** 排序，小的在前 */
   sort?: number;
+  /** 列表显示排序（小的在前）；不填则沿用 sort */
+  listSort?: number;
+  /** 搜索栏里的排序（小的在前） */
+  searchSort?: number;
+  /** 表单里的排序；不填默认与 listSort 相同 */
+  formSort?: number;
+  /** 是否在新增/编辑表单里显示 */
+  formVisible?: boolean;
+  /** 表单里占几列（24 栅格制）：24 = 整行，12 = 一半，8 = 三等分 */
+  formSpan?: number;
+  /** 表单校验规则（正则 / 自定义校验器名） */
+  rules?: FormFieldRules;
+}
+
+/**
+ * 表单字段的校验规则。
+ *
+ * 为什么自定义校验只存「名字」而不是存 JS 代码：
+ *   配置存在数据库里，如果允许存一段可执行 JS，就等于给后台开了任意代码执行的口子。
+ *   所以这里只存校验器名字，真正的函数放前端源码 client/src/components/table/validators.ts，
+ *   开发者注册一次，配置里按名字引用。函数能拿到 (value, formModel)，所以联动校验也没问题。
+ */
+export interface FormFieldRules {
+  /** 正则表达式（字符串形式，后端会校验能否编译） */
+  pattern?: string;
+  /** 校验失败时的提示文案 */
+  message?: string;
+  /** 自定义校验器名字（前端 validators.ts 里注册） */
+  validator?: string;
 }
 
 /** 自定义操作按钮（渲染在每行操作列里） */
@@ -138,6 +167,54 @@ export function isSearchOp(value: string): value is SearchOp {
   return ALL_SEARCH_OPS.includes(value as SearchOp);
 }
 
+/** 自定义校验器名字的合法格式 */
+const VALIDATOR_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,31}$/;
+
+/**
+ * 规范化表单占宽（24 栅格制）。
+ * 24 = 整行，12 = 一半，8 = 三等分；非法值一律退回 24，避免前端布局炸掉。
+ */
+export function normalizeFormSpan(value: any): number {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return 24;
+  return Math.min(24, Math.max(1, Math.round(number)));
+}
+
+/**
+ * 规范化表单校验规则。
+ *
+ * 校验点：
+ *   - pattern 必须是能编译的正则（存的是字符串，编译失败会让前端直接报错，不如在这里拦）
+ *   - validator 只能起个合法的函数名（真正的函数在前端源码里注册）
+ *   - 两个都没传就返回 undefined，避免数据库里塞一堆空对象
+ */
+export function normalizeFieldRules(input: any, fieldName: string): FormFieldRules | undefined {
+  if (!input || typeof input !== "object") return undefined;
+
+  const pattern =
+    input.pattern === undefined || input.pattern === null || input.pattern === "" ? undefined : String(input.pattern);
+  const message = input.message ? String(input.message) : undefined;
+  const validator =
+    input.validator === undefined || input.validator === null || input.validator === ""
+      ? undefined
+      : String(input.validator);
+
+  if (pattern) {
+    try {
+      // eslint-disable-next-line no-new
+      new RegExp(pattern);
+    } catch {
+      throw new Error(`字段「${fieldName}」的校验正则不合法：${pattern}`);
+    }
+  }
+  if (validator && !VALIDATOR_NAME_PATTERN.test(validator)) {
+    throw new Error(`字段「${fieldName}」的自定义校验器名不合法：只能字母/数字/下划线，且不能以数字开头`);
+  }
+
+  if (!pattern && !validator) return undefined;
+  return { pattern, message, validator };
+}
+
 /**
  * 规范化字段列表。
  *
@@ -183,6 +260,12 @@ export function normalizeFields(input: unknown): TableField[] {
       raw.searchOp && isSearchOp(String(raw.searchOp)) ? (raw.searchOp as SearchOp) : defaultSearchOp(type);
     const label = String(raw.label || name).trim() || name;
 
+    const listSort = Number.isFinite(Number(raw.listSort))
+      ? Number(raw.listSort)
+      : Number.isFinite(Number(raw.sort))
+        ? Number(raw.sort)
+        : index;
+
     fields.push({
       name,
       label,
@@ -196,6 +279,15 @@ export function normalizeFields(input: unknown): TableField[] {
       slot: raw.slot ? String(raw.slot) : undefined,
       options: raw.options && typeof raw.options === "object" ? raw.options : undefined,
       sort: Number.isFinite(Number(raw.sort)) ? Number(raw.sort) : index,
+      // 列表排序：没填就用老字段 sort，再没有就用数组下标
+      listSort,
+      // 搜索排序：没填就按下标
+      searchSort: Number.isFinite(Number(raw.searchSort)) ? Number(raw.searchSort) : index,
+      // 表单排序：没填默认和列表排序一致（符合需求 002 第 5 条）
+      formSort: Number.isFinite(Number(raw.formSort)) ? Number(raw.formSort) : listSort,
+      formVisible: raw.formVisible === undefined ? true : Boolean(raw.formVisible),
+      formSpan: normalizeFormSpan(raw.formSpan),
+      rules: normalizeFieldRules(raw.rules, name),
     });
   });
 
@@ -233,7 +325,8 @@ export function normalizeCustomActions(input: unknown): CustomAction[] {
 }
 
 /**
- * 默认操作列配置：新增/修改/删除全开，权限码用 data:*。
+ * 默认操作列配置：新增/修改/删除全开，权限码用全局 data:*。
+ * （新建表格配置时用的是下面按 TCID 生成的版本，这个留着给老数据和测试用）
  */
 export function defaultOperations(): TableOperations {
   return {
@@ -243,6 +336,27 @@ export function defaultOperations(): TableOperations {
     createPermission: "data:create",
     updatePermission: "data:update",
     deletePermission: "data:delete",
+  };
+}
+
+/**
+ * 按 TCID 生成默认的按钮权限码（新建表格配置时用）。
+ *
+ * 为什么按 TCID 隔离：
+ *   以前默认是全局 data:create，「A 表的新增」和「B 表的新增」是同一个码，
+ *   角色里一勾等于所有表都能新增。按 TCID 生成 data:create:TORDER 之后，
+ *   权限树里勾哪张表就只放哪张表，语义清晰。
+ *
+ * 注意：老配置里已写死的 data:create 仍然有效（不做数据迁移，避免动历史角色）。
+ */
+export function defaultOperationsForTcid(tcid: string): TableOperations {
+  return {
+    create: true,
+    update: true,
+    delete: true,
+    createPermission: `data:create:${tcid}`,
+    updatePermission: `data:update:${tcid}`,
+    deletePermission: `data:delete:${tcid}`,
   };
 }
 

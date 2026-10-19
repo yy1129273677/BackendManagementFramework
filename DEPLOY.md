@@ -279,6 +279,22 @@ ufw reload
   # 4. 提交，服务器上 update.sh 会自动执行
   ```
 
+### 7.1.1 数据迁移脚本（不是 schema 迁移，要手动跑一次）
+
+有些改动不是改表结构，而是**改数据**，例如需求 002 把老表的全局权限码
+`data:create` 迁成按表隔离的 `data:create:<tcid>`。这类用 `server/prisma/` 下的脚本：
+
+```bash
+# ⚠️ 先备份（见 7.2）
+cd ~/bmf
+docker compose exec server npm run migrate:002:dry   # 预览会改哪些表/角色
+docker compose exec server npm run migrate:002       # 真正执行（单事务）
+
+# 已迁移过的会输出「无需迁移」，可以放心重复跑
+```
+
+跑完让相关账号**重新登录**（权限签在 JWT 里，旧 token 还是旧权限）。
+
 ### 7.2 备份
 
 ```bash

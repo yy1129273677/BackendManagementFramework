@@ -51,11 +51,13 @@
     </el-table>
 
     <!-- ============ 设计器 ============ -->
+    <!-- 需求 002 第 5 条：一级弹框加宽（1180 → 1400），字段多时不用左右拖 -->
     <el-dialog
       v-model="designerVisible"
       :title="designerMode === 'create' ? '新建表格配置' : `编辑表格配置（${editingTcid}）`"
-      width="1180px"
-      top="4vh"
+      width="1400px"
+      top="3vh"
+      :close-on-click-modal="false"
     >
       <el-alert
         v-if="designerMode === 'edit'"
@@ -93,62 +95,81 @@
         <!-- 字段列表 -->
         <el-form-item label="字段配置">
           <div style="width: 100%">
-            <el-table :data="form.fields" border size="small" max-height="320">
-              <el-table-column label="字段名(列名)" width="150">
+            <el-table :data="form.fields" border size="small" max-height="340">
+              <el-table-column label="字段名(列名)" width="140" fixed>
                 <template #default="{ row }">
                   <el-input v-model="row.name" size="small" :disabled="row.locked" placeholder="order_no" />
                 </template>
               </el-table-column>
-              <el-table-column label="标签" width="130">
+              <el-table-column label="标签" width="110">
                 <template #default="{ row }">
                   <el-input v-model="row.label" size="small" placeholder="订单号" />
                 </template>
               </el-table-column>
-              <el-table-column label="类型" width="130">
+              <el-table-column label="类型" width="110">
                 <template #default="{ row }">
                   <el-select v-model="row.type" size="small" :disabled="row.locked">
                     <el-option v-for="item in FIELD_TYPES" :key="item.value" :label="item.label" :value="item.value" />
                   </el-select>
                 </template>
               </el-table-column>
-              <el-table-column label="显示" width="60">
+              <el-table-column label="显示" width="56">
                 <template #default="{ row }">
                   <el-switch v-model="row.visible" size="small" />
                 </template>
               </el-table-column>
-              <el-table-column label="可搜索" width="70">
+              <el-table-column label="可搜索" width="64">
                 <template #default="{ row }">
                   <el-switch v-model="row.searchable" size="small" />
                 </template>
               </el-table-column>
-              <el-table-column label="搜索方式" width="130">
+              <el-table-column label="搜索方式" width="110">
                 <template #default="{ row }">
                   <el-select v-model="row.searchOp" size="small" :disabled="!row.searchable">
                     <el-option v-for="item in SEARCH_OPS" :key="item.value" :label="item.label" :value="item.value" />
                   </el-select>
                 </template>
               </el-table-column>
-              <el-table-column label="可编辑" width="70">
+              <el-table-column label="可编辑" width="64">
                 <template #default="{ row }">
                   <el-switch v-model="row.editable" size="small" />
                 </template>
               </el-table-column>
-              <el-table-column label="必填" width="60">
-                <template #default="{ row }">
-                  <el-switch v-model="row.required" size="small" />
-                </template>
-              </el-table-column>
-              <el-table-column label="列宽" width="90">
+              <el-table-column label="列宽" width="76">
                 <template #default="{ row }">
                   <el-input-number v-model="row.width" size="small" :min="60" :controls="false" style="width: 100%" />
                 </template>
               </el-table-column>
-              <el-table-column label="字典编码" width="130">
+              <!-- 需求 002 第 5 条：列表排序 / 搜索排序 -->
+              <el-table-column label="列表排序" width="80">
                 <template #default="{ row }">
-                  <el-input v-model="row.dictCode" size="small" placeholder="如 order_status" />
+                  <el-input-number v-model="row.listSort" size="small" :controls="false" style="width: 100%" />
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="70" fixed="right">
+              <el-table-column label="搜索排序" width="80">
+                <template #default="{ row }">
+                  <el-input-number v-model="row.searchSort" size="small" :controls="false" style="width: 100%" />
+                </template>
+              </el-table-column>
+              <!-- 字典编码改成下拉（数据来自业务字典类型） -->
+              <el-table-column label="字典编码" width="150">
+                <template #default="{ row }">
+                  <el-select v-model="row.dictCode" size="small" clearable filterable placeholder="不用字典">
+                    <el-option
+                      v-for="item in dictTypes"
+                      :key="item.code"
+                      :label="`${item.name}（${item.code}）`"
+                      :value="item.code"
+                    />
+                  </el-select>
+                </template>
+              </el-table-column>
+              <el-table-column label="表单" width="88">
+                <template #default="{ $index }">
+                  <el-button link type="primary" size="small" @click="openFormConfig($index)">表单配置</el-button>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="64" fixed="right">
                 <template #default="{ $index }">
                   <el-button link type="danger" size="small" @click="removeField($index)">删除</el-button>
                 </template>
@@ -156,7 +177,7 @@
             </el-table>
             <el-button style="margin-top: 8px" size="small" @click="addField">+ 添加字段</el-button>
             <span class="text-muted" style="margin-left: 8px">
-              字段名就是数据库列名：小写字母开头，只能含小写字母、数字、下划线
+              字段名就是数据库列名：小写字母开头，只能含小写字母、数字、下划线。表单排序/显示/栅格/校验在「表单配置」里设。
             </span>
           </div>
         </el-form-item>
@@ -242,6 +263,77 @@
       </template>
     </el-dialog>
 
+    <!-- 二级弹框：单个字段的表单配置（需求 002 第 5 条） -->
+    <el-dialog
+      v-model="formConfigVisible"
+      :title="`表单配置 - ${activeFormField?.label || activeFormField?.name || ''}`"
+      width="640px"
+      append-to-body
+    >
+      <el-form v-if="activeFormField" label-width="110px">
+        <el-form-item label="表单排序">
+          <el-input-number v-model="activeFormField.formSort" :controls="false" />
+          <span class="text-muted" style="margin-left: 8px">默认与列表排序相同</span>
+        </el-form-item>
+
+        <el-form-item label="是否显示">
+          <el-switch v-model="activeFormField.formVisible" active-text="显示" inactive-text="隐藏" />
+          <span class="text-muted" style="margin-left: 8px">关掉后表单里不出现这个字段（数据仍保留）</span>
+        </el-form-item>
+
+        <el-form-item label="所占列">
+          <el-select v-model="activeFormField.formSpan" style="width: 260px">
+            <el-option :value="24" label="24（整行，默认）" />
+            <el-option :value="12" label="12（半行，一行两个）" />
+            <el-option :value="8" label="8（一行三个）" />
+            <el-option :value="6" label="6（一行四个）" />
+            <el-option :value="4" label="4（一行六个）" />
+          </el-select>
+          <span class="text-muted" style="margin-left: 8px">按 24 栅格算</span>
+        </el-form-item>
+
+        <el-form-item label="是否必填">
+          <el-switch v-model="activeFormField.required" />
+        </el-form-item>
+
+        <el-divider content-position="left">验证规则</el-divider>
+
+        <el-form-item label="内置正则">
+          <el-select
+            placeholder="选一个预设，自动填下面的正则和提示"
+            clearable
+            style="width: 100%"
+            @change="applyPreset"
+          >
+            <el-option v-for="item in presetPatterns" :key="item.label" :label="item.label" :value="item.label" />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="正则">
+          <el-input v-model="activeFormField.pattern" placeholder="如：^1[3-9]\d{9}$" spellcheck="false" />
+          <div class="text-muted">留空表示不做格式校验；正则写错后端会拒绝保存</div>
+        </el-form-item>
+
+        <el-form-item label="错误提示">
+          <el-input v-model="activeFormField.patternMessage" placeholder="如：请输入正确的手机号" />
+        </el-form-item>
+
+        <el-form-item label="自定义校验">
+          <el-select v-model="activeFormField.validator" clearable placeholder="不启用" style="width: 100%">
+            <el-option v-for="name in validatorNames" :key="name" :label="name" :value="name" />
+          </el-select>
+          <div class="text-muted">
+            校验函数在 <code>client/src/components/table/validators.ts</code> 注册，能拿到整个表单做联动校验。 不直接存
+            JS 代码是为了避免"配置即执行任意脚本"的安全问题。
+          </div>
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button type="primary" @click="formConfigVisible = false">完成</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 创建成功后展示 TCID -->
     <el-dialog v-model="resultVisible" title="配置已保存" width="520px">
       <el-result icon="success" title="表格配置已创建">
@@ -280,10 +372,11 @@
  *   ③ 操作列（新增/修改/删除的开关 + 各自需要的权限码）
  *   ④ 自定义按钮（label 给人看，value 给 slot 用）
  */
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { tableConfigApi } from "@/api";
+import { dictApi, tableConfigApi } from "@/api";
+import { PRESET_PATTERNS, listValidators } from "@/components/table/validators";
 import { useAuthStore } from "@/stores/auth";
 
 const router = useRouter();
@@ -301,6 +394,22 @@ interface DesignerField {
   required: boolean;
   width?: number;
   dictCode: string;
+  /** 列表显示排序（需求 002 第 5 条） */
+  listSort: number;
+  /** 搜索栏排序 */
+  searchSort: number;
+  /** 表单排序（默认与列表排序相同） */
+  formSort: number;
+  /** 是否在表单里显示 */
+  formVisible: boolean;
+  /** 表单占宽（24 栅格制） */
+  formSpan: number;
+  /** 校验正则 */
+  pattern: string;
+  /** 校验失败提示 */
+  patternMessage: string;
+  /** 自定义校验器名字（前端 validators.ts 注册） */
+  validator: string;
   /** 编辑已有表格时，老字段的列名不允许改（改了等于新增一列，老数据没了） */
   locked?: boolean;
 }
@@ -350,10 +459,21 @@ const loading = ref(false);
 const list = ref<any[]>([]);
 const keyword = ref("");
 
+/** 业务字典类型（字段的「字典编码」改下拉后要用） */
+const dictTypes = ref<any[]>([]);
+/** 已注册的自定义校验器名字 */
+const validatorNames = ref<string[]>(listValidators());
+/** 内置正则预设 */
+const presetPatterns = PRESET_PATTERNS;
+
 const designerVisible = ref(false);
 const designerMode = ref<"create" | "edit">("create");
 const editingTcid = ref("");
 const saving = ref(false);
+
+/** 二级弹框：单个字段的表单配置（需求 002 第 5 条） */
+const formConfigVisible = ref(false);
+const formConfigIndex = ref(-1);
 
 const resultVisible = ref(false);
 const createdTcid = ref("");
@@ -399,6 +519,14 @@ function emptyField(index: number): DesignerField {
     required: false,
     width: undefined,
     dictCode: "",
+    listSort: index,
+    searchSort: index,
+    formSort: index,
+    formVisible: true,
+    formSpan: 24,
+    pattern: "",
+    patternMessage: "",
+    validator: "",
     locked: false,
   };
 }
@@ -446,6 +574,14 @@ async function openEdit(row: any): Promise<void> {
     required: field.required === true,
     width: field.width,
     dictCode: field.options?.dict || "",
+    listSort: field.listSort ?? field.sort ?? 0,
+    searchSort: field.searchSort ?? field.sort ?? 0,
+    formSort: field.formSort ?? field.listSort ?? field.sort ?? 0,
+    formVisible: field.formVisible !== false,
+    formSpan: field.formSpan || 24,
+    pattern: field.rules?.pattern || "",
+    patternMessage: field.rules?.message || "",
+    validator: field.rules?.validator || "",
     // 已有字段锁住列名和类型：改名/改类型会丢数据，后端也会拒绝
     locked: true,
   }));
@@ -526,6 +662,20 @@ async function save(): Promise<void> {
       required: field.required,
       width: field.width || undefined,
       sort: index,
+      // 需求 002 第 5 条：列表/搜索/表单各自的排序 + 表单显示与栅格 + 校验规则
+      listSort: Number(field.listSort) || 0,
+      searchSort: Number(field.searchSort) || 0,
+      formSort: Number(field.formSort) || 0,
+      formVisible: field.formVisible,
+      formSpan: Number(field.formSpan) || 24,
+      rules:
+        field.pattern || field.validator
+          ? {
+              pattern: field.pattern.trim() || undefined,
+              message: field.patternMessage.trim() || undefined,
+              validator: field.validator.trim() || undefined,
+            }
+          : undefined,
       options: field.dictCode ? { dict: field.dictCode.trim() } : undefined,
     })),
     operations: { ...form.operations },
@@ -558,6 +708,35 @@ async function save(): Promise<void> {
     // 错误信息已由拦截器弹出；这里保持弹窗打开，方便用户改完再存
   } finally {
     saving.value = false;
+  }
+}
+
+// ---------------- 表单配置二级弹框（需求 002 第 5 条）----------------
+/** 打开某个字段的表单配置弹框 */
+function openFormConfig(index: number): void {
+  formConfigIndex.value = index;
+  formConfigVisible.value = true;
+}
+
+/** 二级弹框正在编辑的字段（直接改 form.fields 里的对象，保存时一并提交） */
+const activeFormField = computed<DesignerField | null>(() => form.fields[formConfigIndex.value] || null);
+
+/** 选一个内置正则预设，自动填好正则和提示 */
+function applyPreset(value: string): void {
+  const preset = presetPatterns.find((item: any) => item.label === value);
+  const field = activeFormField.value;
+  if (!preset || !field) return;
+  field.pattern = preset.pattern;
+  field.patternMessage = preset.message;
+}
+
+/** 拉业务字典类型，给「字典编码」下拉用 */
+async function loadDictTypes(): Promise<void> {
+  try {
+    const result = await dictApi.types();
+    dictTypes.value = result.list || [];
+  } catch {
+    dictTypes.value = [];
   }
 }
 
@@ -601,10 +780,15 @@ function goCreateRoute(): void {
   router.push("/route");
 }
 
-onMounted(load);
+onMounted(async () => {
+  // 表格列表 + 字典类型（字段的「字典编码」下拉要用）+ 自定义校验器列表
+  await load();
+  await loadDictTypes();
+  validatorNames.value = listValidators();
+});
 </script>
 
-<style scoped>
+<style lang="less" scoped>
 .tcid {
   color: #409eff;
   font-weight: 600;

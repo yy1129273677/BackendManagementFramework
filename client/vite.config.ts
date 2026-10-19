@@ -36,5 +36,13 @@ export default defineConfig({
     outDir: "dist",
     // 关掉 sourcemap 让产物更小；排查线上问题时可临时改成 true
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        // ECharts 体积大、又很少改：单独拆一个 chunk，业务代码更新时浏览器还能用缓存
+        manualChunks: {
+          echarts: ["echarts"],
+        },
+      },
+    },
   },
 });

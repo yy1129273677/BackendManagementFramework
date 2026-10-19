@@ -142,8 +142,12 @@ model Route {
   icon           String?   @db.VarChar(64)
   sort           Int       @default(0)
   visible        Boolean   @default(true)
-  /// 访问该路由需要的最小权限码，为空表示登录即可见
+  /// 访问该路由需要的最小权限码（历史字段，保留兼容；新逻辑用 accessType）
   permissionCode String?   @map("permission_code") @db.VarChar(64)
+  /// 访问控制：PUBLIC = 登录即可见；ROLE = 需要角色在权限树里勾选该菜单（权限码 menu:<routeId>）
+  accessType     String    @default("PUBLIC") @map("access_type") @db.VarChar(16)
+  /// 注入给前端页面的 JSON 配置：自定义页面通过 props.routeConfig 接收，免改代码调整页面行为
+  config         Json?
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 

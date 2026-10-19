@@ -137,17 +137,24 @@ export async function setupDynamicRoutes(router: any): Promise<void> {
     }
 
     const name = `dyn-${item.id}`;
+    // 需求 002 第 3 条：路由上配的 JSON 配置通过 props 注入页面（自定义页面用 props.routeConfig 接收）
+    const routeConfig = item.config ?? null;
+
     router.addRoute("root", {
       // 子路由要用相对路径（去掉开头的 /），否则会变成顶级路由
       path: String(item.path || "").replace(/^\//, ""),
       name,
       component,
+      // 只有自定义页面需要这个 prop；表格页面用不到（避免给 Table 传无意义属性）
+      props: item.type === "CUSTOM" ? { routeConfig } : false,
       meta: {
         title: item.title,
         icon: item.icon || "Menu",
         tcid: item.tcid || "",
         type: item.type,
         permission: item.permissionCode || "",
+        accessType: item.accessType || "PUBLIC",
+        routeConfig,
         dynamic: true,
       },
     });

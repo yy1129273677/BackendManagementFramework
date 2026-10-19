@@ -7,7 +7,7 @@ import { createPinia } from "pinia";
 import App from "./App.vue";
 import router, { markDynamicRoutesReady, setupDynamicRoutes } from "./router";
 import { TOKEN_KEY } from "./api/request";
-import "./styles/index.css";
+import "./styles/index.less";
 
 /**
  * 前端启动入口。

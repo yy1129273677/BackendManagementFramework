@@ -11,6 +11,7 @@ import { PrismaModule } from "./prisma/prisma.module";
 import { RoleModule } from "./role/role.module";
 import { RouteModule } from "./route/route.module";
 import { SystemModule } from "./system/system.module";
+import { StatsModule } from "./stats/stats.module";
 import { TableConfigModule } from "./table-config/table-config.module";
 import { TableDataModule } from "./table-data/table-data.module";
 import { UserModule } from "./user/user.module";
@@ -41,6 +42,7 @@ import { VectorModule } from "./vector/vector.module";
     TableConfigModule,
     TableDataModule,
     VectorModule,
+    StatsModule,
     HealthModule,
   ],
   providers: [

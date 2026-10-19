@@ -32,11 +32,15 @@
     </el-aside>
 
     <el-container>
-      <!-- 顶栏 -->
+      <!-- 页签导航（需求 002 第 4 条）：放在标题栏上面，切换/关闭访问过的页面 -->
+      <TagsView />
+
+      <!-- 工具条：不再重复显示页面标题（页签和页面卡片里都有），只放右侧操作 -->
       <el-header class="header">
         <div class="header-left">
-          <span class="page-title">{{ route.meta.title || "" }}</span>
-          <el-tag v-if="route.meta.type === 'TABLE'" size="small" type="success"> TCID：{{ route.meta.tcid }} </el-tag>
+          <el-tag v-if="route.meta.type === 'TABLE'" size="small" type="success" effect="plain">
+            TCID：{{ route.meta.tcid }}
+          </el-tag>
         </div>
 
         <div class="header-right">
@@ -104,12 +108,15 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { systemApi } from "@/api";
 import { useAuthStore } from "@/stores/auth";
 import { useMenuStore } from "@/stores/menu";
+import { useTabsStore } from "@/stores/tabs";
 import { resetDynamicRouteFlag, staticRoutes } from "@/router";
+import TagsView from "./TagsView.vue";
 
 const router = useRouter();
 const route = useRoute();
 const auth = useAuthStore();
 const menuStore = useMenuStore();
+const tabsStore = useTabsStore();
 
 /** 子系统列表（只有超管才去拉） */
 const systems = ref<Array<{ id: string; code: string; name: string; isMain: boolean }>>([]);
@@ -176,6 +183,7 @@ async function handleLogout(): Promise<void> {
   }
   auth.logout();
   menuStore.reset();
+  tabsStore.reset();
   resetDynamicRouteFlag();
   ElMessage.success("已退出登录");
   router.replace("/login");
@@ -184,13 +192,14 @@ async function handleLogout(): Promise<void> {
 onMounted(loadSystems);
 </script>
 
-<style scoped>
+<style lang="less" scoped>
+@import "../styles/variables.less";
 .layout {
   height: 100vh;
 }
 
 .aside {
-  background: #1f2d3d;
+  background: @sidebar-bg;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -206,13 +215,13 @@ onMounted(loadSystems);
 }
 
 .logo-title {
-  color: #fff;
+  color: @bg-white;
   font-size: 15px;
   font-weight: 600;
 }
 
 .logo-sub {
-  color: #8a9bb0;
+  color: @sidebar-text-muted;
   font-size: 12px;
   margin-top: 2px;
 }
@@ -223,28 +232,30 @@ onMounted(loadSystems);
 }
 
 .menu :deep(.el-menu-item) {
-  color: #c0ccda;
+  color: @sidebar-text;
 }
 
 .menu :deep(.el-menu-item.is-active) {
-  color: #fff;
-  background: #263445;
+  color: @bg-white;
+  background: @sidebar-active;
 }
 
 .menu :deep(.el-menu-item:hover) {
-  background: #263445;
+  background: @sidebar-active;
 }
 
 .menu-group-title {
-  color: #6b7d92;
+  color: @sidebar-text-muted;
   font-size: 12px;
   padding: 12px 16px 4px;
 }
 
+/* 工具条：48px 白色细条，只放右侧操作，避免和页签/页面标题重复 */
 .header {
-  height: 60px;
-  background: #fff;
-  border-bottom: 1px solid #e4e7ed;
+  height: 48px;
+  padding: 0 16px;
+  background: @bg-white;
+  border-bottom: 1px solid @border-light;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -254,11 +265,6 @@ onMounted(loadSystems);
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.page-title {
-  font-size: 15px;
-  font-weight: 600;
 }
 
 .header-right {

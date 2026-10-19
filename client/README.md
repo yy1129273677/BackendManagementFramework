@@ -42,12 +42,13 @@ src/components/table/
 
 #### props
 
-| 名称         | 类型    | 必填 | 说明                                 |
-| ------------ | ------- | ---- | ------------------------------------ |
-| `tcid`       | string  | ✅   | 表格配置编号，决定渲染哪张表         |
-| `pageSize`   | number  |      | 覆盖配置里的每页条数                 |
-| `showSearch` | boolean |      | 是否显示搜索栏，默认 true            |
-| `height`     | string  |      | 表格高度，长表格建议传，如 `"520px"` |
+| 名称         | 类型    | 必填 | 说明                                                                          |
+| ------------ | ------- | ---- | ----------------------------------------------------------------------------- |
+| `tcid`       | string  | ✅   | 表格配置编号，决定渲染哪张表                                                  |
+| `pageSize`   | number  |      | 覆盖配置里的每页条数                                                          |
+| `showSearch` | boolean |      | 是否显示搜索栏，默认 true                                                     |
+| `height`     | string  |      | 固定表格高度（内部滚动），长表格建议传，如 `"520px"`                          |
+| `minHeight`  | string  |      | 最小高度，数据少/空表时不让表格塌下去，默认 `"320px"`；传了 `height` 时不生效 |
 
 #### 插槽（自定义的关键）
 
@@ -298,3 +299,94 @@ npm run format   # 格式化整个仓库
 ```
 
 编辑器里开了 formatOnSave 的话，Ctrl+S 就是同一套规则，不会二次重排。
+
+### 7.1 单文件组件（SFC）的硬约束
+
+1. **块顺序固定：`<template>` → `<script setup>` → `<style>`**。新写/改写组件都按这个来，
+   不要 script 在前（`App.vue` 这种极简组件也一样）。
+2. **样式一律用 Less**：`<style lang="less" scoped>`。`less` 已经装好（`devDependencies`），
+   不需要额外配置 Vite。
+3. **颜色/圆角/阴影用变量**：共用值都在 `src/styles/variables.less`，组件里这样用：
+
+   ```vue
+   <style lang="less" scoped>
+   @import "../styles/variables.less";
+
+   .box {
+     color: @text-main;
+     border: 1px solid @border-light;
+     border-radius: @radius;
+   }
+   </style>
+   ```
+
+   路径按组件位置调整（`src/views/xxx/` 下是 `../../styles/variables.less`）。
+
+4. 全局样式只在 `src/styles/index.less` 里加，组件样式不要往外泄漏（`scoped` 记得写）。
+
+---
+
+## 8. 需求 002 新增内容（2026-10-19）
+
+| 功能           | 位置                                        | 怎么用                                                           |
+| -------------- | ------------------------------------------- | ---------------------------------------------------------------- |
+| 图标网格选择器 | `components/IconPicker/index.vue`           | `<IconPicker v-model="form.icon" />`，弹层一行 6 个图标、可搜索  |
+| 权限树（角色） | `views/role/index.vue`                      | 「角色管理 → 编辑 → 权限」勾菜单和表格按钮，保存权限码数组       |
+| 路由 JSON 配置 | `views/route/index.vue` + `router/index.ts` | 路由里填 JSON，CUSTOM 页面通过 `props.routeConfig` 接收          |
+| 顶部页签       | `stores/tabs.ts` + `layout/TagsView.vue`    | 自动记录访问页面，支持切换/关闭/关闭其它/关闭全部                |
+| 字段表单配置   | `views/table-config/index.vue`              | 字段行「表单配置」二级弹框：表单排序/显示/24 栅格/必填/校验      |
+| 表单校验       | `components/table/validators.ts`            | 内置 phone/email/idCard…，也可注册自定义校验器（能拿到整个表单） |
+
+### 权限树的数据形状
+
+后端 `GET /api/roles/permission-tree` 返回 `{ tree, keyMap }`：
+
+- `tree` 直接给 `el-tree`（`node-key="key"`，`disabled` 的节点不可勾）
+- `keyMap` 是「节点 key → 权限码」。保存时用它把勾选 key 映射回权限码（同一权限码可能挂在多个节点上）
+
+### 表格字段新增属性（后端 `fields` JSON）
+
+| 属性              | 含义                  | 默认             |
+| ----------------- | --------------------- | ---------------- |
+| `listSort`        | 列表列顺序            | 0                |
+| `searchSort`      | 搜索栏顺序            | 0                |
+| `formSort`        | 表单顺序              | 与 listSort 相同 |
+| `formVisible`     | 表单里是否显示        | true             |
+| `formSpan`        | 表单占宽（24 栅格制） | 24               |
+| `rules.pattern`   | 校验正则（字符串）    | —                |
+| `rules.message`   | 校验失败提示          | —                |
+| `rules.validator` | 前端注册的校验器名字  | —                |
+
+### 自定义校验器怎么写
+
+```ts
+// client/src/components/table/validators.ts（或自己的页面里）
+registerValidator("endAfterStart", (value, formModel) => {
+  if (formModel.start_date && value <= formModel.start_date) return "结束日期必须晚于开始日期";
+  return null;
+});
+```
+
+然后在「表格配置 → 字段 → 表单配置 → 自定义校验」里选 `endAfterStart`。
+**不把 JS 存进数据库执行**，原因见 `docs/requirements/002-20261019-整理版.md` 第 3 节 ⑥。
+
+---
+
+## 9. 首页图表统计（需求 003）
+
+首页 `views/dashboard/index.vue` 是 ECharts 看板，按「当前在哪个系统」自动切换：
+
+| 视角   | 什么时候                         | 内容                                                                                                                                             |
+| ------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 主系统 | 超管且顶栏没切子系统             | 平台总览：子系统/用户/角色/路由/表格/业务行数 + 资源对比柱状图、表格配置分布饼图、平台新增用户趋势、用户分布饼图、资源构成饼图、资源排行堆叠柱图 |
+| 子系统 | 普通用户，或超管切到了某个子系统 | 本系统：用户/角色/路由/表格/字典计数 + 各表数据量 Top10、角色用户饼图、各表数据量占比、新增用户折线、新增业务数据折线                            |
+
+图表组件是 [EChart.vue](src/components/charts/EChart.vue)（`echarts/core` 按需引入 Bar/Line/Pie）：
+
+```vue
+<EChart :option="option" height="340px" />
+```
+
+它负责 init / `setOption` / `ResizeObserver` 自适应 / 卸载时 dispose，页面只管拼 option。
+数据来自 `statsApi.overview()` / `statsApi.system()`（后端 `src/stats/`）。
+**子系统视角不再有搭建步骤和连接状态**，只有图表。
