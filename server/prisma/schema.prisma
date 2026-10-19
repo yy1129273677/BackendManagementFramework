@@ -1,0 +1,201 @@
+// =============================================================================
+// 数据模型说明（给第一次读这个文件的人）
+//
+// 这套系统分两层：
+//   1. 主系统：只有超管一个人用，负责「配置」——建子系统、建路由、配表格、配权限
+//   2. 子系统：真正给客户用的后台，靠 systemId 做数据隔离
+//
+// 所以你会发现：几乎所有业务表都带 systemId（租户 id），
+// 所有查询都必须带上它，否则就会串系统（A 客户看到 B 客户的数据）。
+//
+// TCID 是本系统最核心的概念：
+//   在页面上配置一张表格 → 后端生成一个 TCID（比如 TDEMOORDERS）→
+//   前端 <Table :tcid="TCID" /> 就能把这张表渲染出来。
+//   TableConfig 这张表存的是「表格的说明书」，真正的业务数据在 biz_<tcid> 物理表里。
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// 路由类型：CUSTOM = 自定义开发页面；TABLE = 配置出来的表格页面
+enum RouteType {
+  CUSTOM
+  TABLE
+}
+
+/// 子系统（租户）。主系统固定 code = "main"，且 isMain = true
+model System {
+  id        String   @id @default(uuid()) @db.Uuid
+  /// 系统编码，用户登录时填的就是它；全局唯一
+  code      String   @unique @db.VarChar(64)
+  /// 子系统名称，展示用
+  name      String   @db.VarChar(128)
+  /// 是否主系统（只有一个）
+  isMain    Boolean  @default(false) @map("is_main")
+  /// 1 启用 / 0 停用
+  status    Int      @default(1)
+  remark    String?  @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users     User[]
+  roles     Role[]
+  dictTypes DictType[]
+  routes    Route[]
+  tables    TableConfig[]
+
+  @@map("sys_system")
+}
+
+/// 用户。账号在「同一个子系统内」唯一，不同子系统可以重名
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  systemId     String   @map("system_id") @db.Uuid
+  username     String   @db.VarChar(64)
+  /// bcrypt 加盐后的密码哈希，绝不存明文
+  passwordHash String   @map("password_hash") @db.VarChar(128)
+  nickname     String?  @db.VarChar(64)
+  /// 1 启用 / 0 停用
+  status       Int      @default(1)
+  roleId       String?  @map("role_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  system System @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  role   Role?  @relation(fields: [roleId], references: [id], onDelete: SetNull)
+
+  @@unique([systemId, username])
+  @@map("sys_user")
+}
+
+/// 角色。权限码数组决定这个角色能看到什么菜单、能点哪些按钮
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  systemId    String   @map("system_id") @db.Uuid
+  code        String   @db.VarChar(64)
+  name        String   @db.VarChar(64)
+  /// 权限码列表，例如 ["route:read","data:read"]；超管为 ["*"]
+  permissions String[] @default([])
+  remark      String?  @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  system System @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  users  User[]
+
+  @@unique([systemId, code])
+  @@map("sys_role")
+}
+
+/// 业务字典类型，比如「订单状态」
+model DictType {
+  id        String   @id @default(uuid()) @db.Uuid
+  systemId  String   @map("system_id") @db.Uuid
+  code      String   @db.VarChar(64)
+  name      String   @db.VarChar(64)
+  remark    String?  @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  system System     @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  items  DictItem[]
+
+  @@unique([systemId, code])
+  @@map("sys_dict_type")
+}
+
+/// 字典项，比如「待付款 / 已付款 / 已发货」
+model DictItem {
+  id         String   @id @default(uuid()) @db.Uuid
+  dictTypeId String   @map("dict_type_id") @db.Uuid
+  label      String   @db.VarChar(64)
+  value      String   @db.VarChar(64)
+  sort       Int      @default(0)
+  status     Int      @default(1)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  dictType DictType @relation(fields: [dictTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([dictTypeId, value])
+  @@map("sys_dict_item")
+}
+
+/// 路由（菜单项）。子系统登录后，左侧菜单就是从这里读出来的
+model Route {
+  id             String    @id @default(uuid()) @db.Uuid
+  systemId       String    @map("system_id") @db.Uuid
+  parentId       String?   @map("parent_id") @db.Uuid
+  title          String    @db.VarChar(64)
+  path           String    @db.VarChar(128)
+  type           RouteType @default(CUSTOM)
+  /// 自定义页面的前端文件路径（相对 client/src/views），例如 "examples/demo-table.vue"
+  componentPath  String?   @map("component_path") @db.VarChar(255)
+  /// 表格路由绑定的 TCID，type = TABLE 时必填
+  tcid           String?   @db.VarChar(32)
+  icon           String?   @db.VarChar(64)
+  sort           Int       @default(0)
+  visible        Boolean   @default(true)
+  /// 访问该路由需要的最小权限码，为空表示登录即可见
+  permissionCode String?   @map("permission_code") @db.VarChar(64)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  system System @relation(fields: [systemId], references: [id], onDelete: Cascade)
+
+  @@unique([systemId, path])
+  @@map("sys_route")
+}
+
+/// 表格配置（TCID 的说明书）。
+/// 一条记录 = 一张可渲染的表格，业务数据存在 biz_<tcid> 物理表里
+model TableConfig {
+  id            String   @id @default(uuid()) @db.Uuid
+  /// 表格配置编号，全局唯一、生成后不可变，前端就是靠它取配置
+  tcid          String   @unique @db.VarChar(32)
+  systemId      String   @map("system_id") @db.Uuid
+  name          String   @db.VarChar(128)
+  remark        String?  @db.VarChar(255)
+  /// 对应的物理表名，固定 biz_<tcid 小写>
+  physicalTable String   @map("physical_table") @db.VarChar(64)
+  /// 字段定义数组：[{name,label,type,visible,searchable,searchOp,editable,required,width,slot,sort}]
+  fields        Json
+  /// 默认搜索逻辑：AND（全部满足）/ OR（任一满足）/ CUSTOM（前端传复杂条件组）
+  searchMode    String   @default("AND") @map("search_mode") @db.VarChar(16)
+  /// 自定义搜索条件的默认模板（结构化条件组，不是原始 SQL）
+  conditions    Json?
+  /// 操作列权限与开关：{create,update,delete,createPermission,...}
+  operations    Json
+  /// 自定义操作按钮：[{label,value,permission}]
+  customActions Json     @map("custom_actions")
+  pageSize      Int      @default(20) @map("page_size")
+  createdBy     String?  @map("created_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  system System @relation(fields: [systemId], references: [id], onDelete: Cascade)
+
+  @@map("sys_table_config")
+}
+
+/// pgvector 预留表：给「语义检索」用（比如自然语言找菜单、按语义搜业务数据）。
+/// 当前版本只建表 + 建向量扩展，还没有接入 embedding 模型，属于有意预留
+model VectorDocument {
+  id        String                      @id @default(uuid()) @db.Uuid
+  systemId  String                      @map("system_id") @db.Uuid
+  /// 来源标识，比如 route:123 / table:TDEMOORDERS
+  source    String                      @db.VarChar(128)
+  content   String                      @db.Text
+  /// 1024 维向量（pgvector 提供 vector 类型，Prisma 暂时不原生支持，所以标为 Unsupported）
+  embedding Unsupported("vector(1024)")?
+  createdAt DateTime                    @default(now()) @map("created_at")
+
+  @@index([systemId])
+  @@map("sys_vector_document")
+}

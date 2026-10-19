@@ -1,0 +1,3 @@
+# 由 Prisma 维护，声明数据库类型
+provider = "postgresql"
+

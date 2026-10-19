@@ -1,0 +1,262 @@
+# 前端说明（Vue3 + Vite + Element Plus）
+
+> 这个前端的核心是一个**公用表格组件 `<Table :tcid="TCID" />`**：
+> 给一个编号，它自己把整张业务表渲染出来（搜索栏、列、分页、增删改、自定义按钮）。
+>
+> 读完这份文档你应该能回答：**前端做了什么、怎么跑起来、怎么用 Table 组件写自己的页面、哪些地方容易踩坑**。
+
+---
+
+## 1. 前端做了什么
+
+### 1.1 主系统页面（写死在代码里，给超管用）
+
+| 路由 | 页面 | 作用 |
+|---|---|---|
+| `/login` | 登录页 | 用户名 + 密码 + 系统编码（留空=主系统） |
+| `/dashboard` | 首页 | 四步上手指引 + 后端/数据库/pgvector 状态 |
+| `/system` | 子系统管理 | 建/改/删子系统，「进入配置」切换当前子系统 |
+| `/table-config` | 表格配置（TCID 设计器） | 配字段、搜索模式、操作权限、自定义按钮；保存后生成 TCID |
+| `/route` | 路由管理 | 建 CUSTOM（手写页面）或 TABLE（TCID）路由，菜单即时生效 |
+| `/user` | 用户管理 | 子系统内的用户增删改、分配角色 |
+| `/role` | 角色管理 | 勾选权限码 |
+| `/dict` | 业务字典 | 维护下拉选项（如订单状态） |
+| `/preview/:tcid` | 表格预览 | 配完表不建路由也能先看效果 |
+
+### 1.2 子系统页面（运行时从数据库生成）
+
+- 登录后调 `GET /api/routes/my` 拿到当前子系统里"当前用户能看到的菜单"
+- `type=TABLE` → 挂载 `views/runtime/table-page.vue`，内部渲染 `<Table :tcid>`
+- `type=CUSTOM` → 按 `componentPath` 从 `src/views` 里找到对应 `.vue` 文件加载
+- 找不到文件时显示 `views/runtime/missing-page.vue`（提示页，不是白屏）
+
+### 1.3 公用表格组件（最重要）
+
+```
+src/components/table/
+├── index.vue      # 组件本体
+├── types.ts       # 后端配置的 TS 类型
+├── utils.ts       # 纯函数：插槽名、列筛选、搜索值序列化
+└── utils.spec.ts  # vitest 单测（18 个用例）
+```
+
+#### props
+
+| 名称 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `tcid` | string | ✅ | 表格配置编号，决定渲染哪张表 |
+| `pageSize` | number | | 覆盖配置里的每页条数 |
+| `showSearch` | boolean | | 是否显示搜索栏，默认 true |
+| `height` | string | | 表格高度，长表格建议传，如 `"520px"` |
+
+#### 插槽（自定义的关键）
+
+| 插槽名 | 作用域 | 说明 |
+|---|---|---|
+| `#action-<value>` | `{ row, action, reload }` | 接管配置里 `value=<value>` 的自定义按钮 |
+| `#col-<字段名>` | `{ row, column, value }` | 接管某一列的渲染（也支持配置里自定义的 `slot` 名） |
+| `#toolbar` | `{ reload, config }` | 表格右上角工具栏追加自己的按钮 |
+
+> **插槽名必须和配置里的 `value` 完全一致**（大小写敏感）。
+> 配置里按钮 `value = "ship"` → 页面写 `#action-ship`。
+> 名字对不上不会报错，只是按钮会走默认逻辑（弹一个"点击了 xxx"的提示），很难排查，所以务必对齐。
+
+#### 事件与暴露方法
+
+```ts
+const tableRef = ref()
+
+<Table
+  ref="tableRef"
+  tcid="TDEMOORDERS"
+  @action="({ value, row, action }) => console.log(value, row)"
+  @loaded="({ total }) => console.log('共', total, '条')"
+/>
+
+tableRef.value.reload()      // 重新拉配置 + 数据
+tableRef.value.getConfig()   // 当前渲染配置
+tableRef.value.getRows()     // 当前页数据
+```
+
+### 1.4 完整用法示例
+
+`src/views/examples/demo-table.vue` 是可直接参考的模板：
+
+```vue
+<script setup lang="ts">
+import Table from '@/components/table/index.vue'
+import {tableDataApi} from '@/api'
+
+const TCID = 'TDEMOORDERS'
+
+/** 接管「标记发货」按钮 */
+async function handleShip({ row, reload }) {
+  await tableDataApi.update(TCID, row.id, {status: 'shipped'})
+  reload()
+}
+</script>
+
+<template>
+  <Table :tcid="TCID">
+    <!-- 自定义按钮：配置里 value = 'ship' -->
+    <template #action-ship="{ row, reload }">
+      <el-button link type="success" @click="handleShip({row, reload})">标记发货</el-button>
+    </template>
+
+    <!-- 自定义单元格：把状态渲染成彩色标签 -->
+    <template #col-status="{ value }">
+      <el-tag>{{ value }}</el-tag>
+    </template>
+  </Table>
+</template>
+```
+
+---
+
+## 2. 技术栈
+
+| 类别 | 选型 | 说明 |
+|---|---|---|
+| 框架 | Vue 3（`<script setup>`） | Composition API |
+| 构建 | Vite 5 | 开发冷启动快，`import.meta.glob` 做动态页面加载 |
+| UI | Element Plus 2.9 | 全量引入（见"注意事项"） |
+| 路由 | vue-router 4（**hash 模式**） | 部署不需要 Nginx 配 try_files 回退 |
+| 状态 | Pinia | `stores/auth.ts` 登录态，`stores/menu.ts` 动态菜单 |
+| 请求 | axios | `api/request.ts` 统一拦截：token、X-System-Code、拆包装、401 跳登录 |
+| 测试 | vitest | `npm test`，纯函数单测，不需要浏览器环境 |
+
+---
+
+## 3. 目录结构
+
+```
+client/
+├── src/
+│   ├── main.ts                      # 入口：Element Plus / 图标 / Pinia / Router / 预加载动态路由
+│   ├── App.vue
+│   ├── api/
+│   │   ├── request.ts               # axios 实例与拦截器
+│   │   └── index.ts                 # 所有接口封装（authApi/systemApi/.../tableDataApi）
+│   ├── components/table/            # ★ 公用表格组件
+│   ├── constants/permissions.ts     # 权限码清单（与后端 constants.ts 对齐）
+│   ├── layout/index.vue             # 左侧菜单 + 顶栏（含超管切换子系统）
+│   ├── router/index.ts              # 静态路由 + 动态路由注册 + 全局守卫
+│   ├── stores/                      # auth / menu
+│   ├── styles/index.css
+│   └── views/
+│       ├── login/ dashboard/ system/ route/ user/ role/ dict/ table-config/
+│       ├── runtime/                 # table-page.vue（表格路由容器）、missing-page.vue
+│       └── examples/demo-table.vue  # ★ 自定义页面 + 插槽示例
+├── nginx.conf                       # 生产用 Nginx 配置（SPA + /api 反代）
+├── Dockerfile
+├── vite.config.ts                   # @ 别名、dev proxy（/api → 127.0.0.1:3000）
+└── package.json
+```
+
+---
+
+## 4. 启动方式
+
+### 4.1 开发模式
+
+```bash
+cd client
+npm install
+npm run dev
+```
+
+- 访问 <http://localhost:5173>
+- 接口请求 `/api/**` 会被 Vite 代理到 `http://127.0.0.1:3000`（见 `vite.config.ts` 的 `server.proxy`）
+- 后端端口不是 3000：`VITE_PROXY_TARGET=http://127.0.0.1:3001 npm run dev`（Windows PowerShell 用 `$env:VITE_PROXY_TARGET=...`）
+- **前提**：后端已启动、且数据库已跑过迁移和种子（见 `server/README.md`）
+
+### 4.2 构建与预览
+
+```bash
+npm run build        # 产物在 dist/
+npm run preview      # 本地起个静态服务看构建产物（默认 4173 端口）
+```
+
+### 4.3 测试
+
+```bash
+npm test             # vitest run，18 个用例
+```
+
+### 4.4 npm scripts 速查
+
+| 命令 | 作用 |
+|---|---|
+| `npm run dev` | 开发服务器（5173，带 /api 代理） |
+| `npm run build` | 生产构建 → `dist/` |
+| `npm run preview` | 预览构建产物 |
+| `npm test` | vitest 单测 |
+
+---
+
+## 5. 注意事项
+
+1. **Element Plus 是全量引入**
+   首屏 JS 约 1.27MB（gzip 411KB），构建会有一条"chunk 超过 500KB"的警告，属于预期。
+   想优化就改成按需引入（`unplugin-vue-components` + `unplugin-auto-import`），但那是构建配置的改动，不是当前阶段的事。
+   **不要**为了消警告去删 `main.ts` 里的全量引入，否则所有组件都会找不到。
+
+2. **路由用 hash 模式（地址栏带 `#`）**
+   好处：Nginx / 静态托管不需要配置"任何路径都返回 index.html"，少一个上线必踩的 404 坑。
+   代价：URL 不好看。要换成 history 模式，记得同时改 `nginx.conf` 的 `try_files`。
+
+3. **改后端地址只改两处**
+   开发：`vite.config.ts` 的 proxy target（或 `VITE_PROXY_TARGET`）
+   生产：`client/.env.production` 里的 `VITE_API_BASE`（同域部署可留空）
+
+4. **`import.meta.glob` 是构建期收集的**
+   自定义页面必须是 `src/views` 下真实存在的 `.vue` 文件。
+   开发时新增文件 Vite 会自动感知；`npm run build` 之后新增的文件不会自动出现在产物里，必须重新构建。
+
+5. **前端隐藏按钮 ≠ 安全**
+   权限判断在前端只是体验（不显示不能点的按钮）。
+   真正的拦截在后端守卫，前端改代码也绕不过去。
+
+6. **权限码两份清单要同步**
+   `client/src/constants/permissions.ts` 和后端 `server/src/common/constants.ts` 的 `ALL_PERMISSIONS`。
+   实际渲染角色编辑页时用的是后端接口 `/api/roles/permissions`，前端这份用于兜底和类型提示。
+
+7. **刷新业务页面**
+   动态路由在 `main.ts` 里会预加载（本地有 token 时），所以刷新 `/order/list` 不会掉回首页。
+   如果菜单还没加载完就访问，路由守卫会再加载一次。
+
+8. **切换子系统会整页刷新**
+   顶栏切换"正在配置的子系统"是 `location.reload()`，因为动态路由、菜单、缓存都要重建。
+   代价是几百毫秒，换来的是"绝不会串数据"。
+
+---
+
+## 6. 常见问题
+
+**Q：打开页面白屏 / 菜单是空的**
+A：按 F12 看 Console 和 Network：
+- 401 → 登录过期，重新登录
+- `/api/routes/my` 403/500 → 后端没起或数据库没初始化
+- 动态路由没注册 → 确认当前子系统里配了路由
+
+**Q：`<Table>` 显示"TCID 不存在或不属于当前子系统"**
+A：三种可能：TCID 拼错；这张表配在别的子系统里（切错系统了）；配置已被删除。
+
+**Q：自定义按钮点了没反应**
+A：插槽名和配置里的 `value` 对不上。配置里是 `ship`，模板里必须写 `#action-ship`。
+
+**Q：`npm run build` 报 `esbuild ... Access is denied`（Windows 某些受限环境）**
+A：esbuild 用的是系统临时目录，被策略/杀软锁住了。把临时目录指到可写位置再构建：
+
+```powershell
+$env:TMP = (New-Item -ItemType Directory -Force .tmp).FullName
+$env:TEMP = $env:TMP
+npm run build
+```
+
+**Q：`npm install` 报 `EPERM ... \_cacache\`**
+A：npm 默认缓存在用户目录，受限环境写不进去。把缓存指到项目内：
+
+```bash
+npm install --cache .npm-cache
+```

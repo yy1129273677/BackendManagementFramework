@@ -1,0 +1,67 @@
+{
+  "name": "bmf-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "多租户、配置驱动的后台管理系统框架 —— 后端（NestJS + Prisma + PostgreSQL/pgvector）",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "prisma generate && nest build",
+    "start": "node dist/main.js",
+    "start:dev": "nest start --watch",
+    "start:prod": "node dist/main.js",
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:migrate:diff": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script",
+    "seed": "ts-node -T prisma/seed.ts",
+    "pretest": "prisma generate",
+    "test": "jest --runInBand"
+  },
+  "prisma": {
+    "seed": "ts-node -T prisma/seed.ts"
+  },
+  "jest": {
+    "moduleFileExtensions": ["js", "json", "ts"],
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "testEnvironment": "node"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.11",
+    "@nestjs/config": "^4.0.1",
+    "@nestjs/core": "^11.0.11",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/passport": "^11.0.5",
+    "@nestjs/platform-express": "^11.0.11",
+    "@nestjs/swagger": "^11.1.0",
+    "@prisma/client": "^6.7.0",
+    "bcryptjs": "^2.4.3",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "dotenv": "^16.4.7",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.5",
+    "@nestjs/schematics": "^11.0.2",
+    "@nestjs/testing": "^11.0.11",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/express": "^5.0.1",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.13.10",
+    "@types/passport-jwt": "^4.0.1",
+    "jest": "^29.7.0",
+    "prisma": "^6.7.0",
+    "ts-jest": "^29.2.6",
+    "ts-loader": "^9.5.2",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.7.3"
+  }
+}
