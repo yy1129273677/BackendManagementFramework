@@ -2,36 +2,26 @@
   <div>
     <div class="page-card" style="margin-bottom: 12px">
       <h3 style="margin-top: 0">自定义页面示例（CUSTOM 路由）</h3>
-      <p class="text-muted" style="margin-bottom: 0">
+      <p class="text-muted" style="margin-bottom: 4px">
         这个页面是手写的 vue 文件，通过路由管理里的「前端文件路径」挂到菜单上。
-        表格本身没有一行列定义代码，全部来自 TCID
-        配置；只用了两个按钮插槽和一个状态列插槽。
+      </p>
+      <p class="text-muted" style="margin-bottom: 0">
+        表格本身没有一行列定义代码，全部来自 TCID 配置；只用了两个按钮插槽和一个状态列插槽。
       </p>
     </div>
 
     <Table :tcid="DEMO_TCID">
       <!-- 接管配置里 value = 'ship' 的自定义按钮 -->
       <template #action-ship="{ row, reload }">
-        <el-button
-          link
-          type="success"
-          size="small"
-          @click="handleShip({ row, reload })"
-          >标记发货</el-button
-        >
+        <el-button link type="success" size="small" @click="handleShip({ row, reload })">标记发货</el-button>
       </template>
 
       <!-- 接管配置里 value = 'detail' 的自定义按钮 -->
       <template #action-detail="{ row }">
-        <el-button link type="primary" size="small" @click="handleDetail(row)"
-          >查看详情</el-button
-        >
+        <el-button link type="primary" size="small" @click="handleDetail(row)">查看详情</el-button>
       </template>
 
-      <!-- 接管 status 这一列的渲染。
-                 注意：这里用 row.status 而不是插槽作用域里的 value。
-                 原因：<Table> 的列插槽名是动态的（col-<字段名>），
-                 TypeScript 推断不出每个插槽的 props 类型，用 row 最稳。 -->
+      <!-- 接管 status 列：插槽名是动态的 col-<字段名>，TS 推断不出作用域类型，所以用 row -->
       <template #col-status="{ row }">
         <el-tag :type="statusTagType(row.status)" size="small">
           {{ statusLabels[row.status] || row.status }}
@@ -76,16 +66,9 @@ onMounted(async () => {
 });
 
 /** 自定义按钮「标记发货」：直接把 status 改成 shipped */
-async function handleShip(payload: {
-  row: any;
-  reload: () => void;
-}): Promise<void> {
+async function handleShip(payload: { row: any; reload: () => void }): Promise<void> {
   try {
-    await ElMessageBox.confirm(
-      `确认把订单「${payload.row.order_no}」标记为已发货？`,
-      "操作确认",
-      { type: "warning" },
-    );
+    await ElMessageBox.confirm(`确认把订单「${payload.row.order_no}」标记为已发货？`, "操作确认", { type: "warning" });
   } catch {
     return;
   }
@@ -99,10 +82,7 @@ async function handleShip(payload: {
 function handleDetail(row: any): void {
   ElMessageBox.alert(
     Object.entries(row)
-      .map(
-        ([key, value]) =>
-          `${key}：${value === null || value === "" ? "-" : value}`,
-      )
+      .map(([key, value]) => `${key}：${value === null || value === "" ? "-" : value}`)
       .join("<br/>"),
     `订单详情（${row.order_no || row.id}）`,
     { dangerouslyUseHTMLString: true },
@@ -110,9 +90,7 @@ function handleDetail(row: any): void {
 }
 
 /** 状态标签颜色：不同状态给不同颜色，一眼看出进度 */
-function statusTagType(
-  status: string,
-): "success" | "warning" | "info" | "danger" {
+function statusTagType(status: string): "success" | "warning" | "info" | "danger" {
   if (status === "paid" || status === "shipped") return "success";
   if (status === "pending") return "warning";
   if (status === "cancelled") return "danger";
