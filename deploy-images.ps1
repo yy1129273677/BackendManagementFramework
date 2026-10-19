@@ -39,7 +39,11 @@ param(
     [int]$Port = 8081
 )
 
-$ErrorActionPreference = "Stop"
+# 注意：这里不能设 "Stop"。
+# docker / scp / ssh 会把正常进度信息打到 stderr，PowerShell 5.1 在 Stop 模式下
+# 会把它们当成错误直接终止脚本（报 NativeCommandError）。
+# 所以改成 Continue，靠每一步后面的 $LASTEXITCODE 判断成功失败。
+$ErrorActionPreference = "Continue"
 Set-Location $PSScriptRoot
 
 # 需要构建/上传的镜像名（和 docker-compose.yml 里的 image: 保持一致）
@@ -90,7 +94,9 @@ if ($LASTEXITCODE -ne 0) { throw "docker save 失败" }
 
 # 注意：这里打出来的是「tar 里套一个 tar」。
 # 服务器上要先 tar -xzf 解出内层 tar，再 docker load（脚本第 3 步已处理）。
-& tar -czf $gz $tar
+# 用 -C 指定目录、只传文件名：否则 Windows 自带 tar 会把绝对路径
+# （如 study/project/.../bmf-images.tar）打进包里，服务器解压后文件就跑到嵌套目录里了。
+& tar -czf $gz -C $PSScriptRoot "bmf-images.tar"
 if ($LASTEXITCODE -ne 0) { throw "压缩失败（Windows 自带 tar 不可用？）" }
 Remove-Item $tar -Force
 $sizeMb = [math]::Round((Get-Item $gz).Length / 1MB, 1)
