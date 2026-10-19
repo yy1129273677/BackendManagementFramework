@@ -10,6 +10,8 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
+# 换 npm 源：大陆服务器上官方源慢到不可用
+RUN npm config set registry https://registry.npmmirror.com
 RUN npm ci --no-audit --no-fund
 
 COPY . .

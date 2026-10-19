@@ -17,6 +17,8 @@ RUN apk add --no-cache openssl tzdata
 
 # 先只拷依赖清单，利用 Docker 层缓存：只改代码时不用重新装依赖
 COPY package*.json ./
+# 换 npm 源：大陆服务器上官方源慢到不可用（jisu 项目实测 11 秒/请求 vs 国内源 0.6 秒）
+RUN npm config set registry https://registry.npmmirror.com
 RUN npm ci --no-audit --no-fund
 
 # 拷源码并构建（prisma generate 已包含在 build 脚本里）
