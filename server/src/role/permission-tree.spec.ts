@@ -8,13 +8,20 @@ import {
 /**
  * 权限树构建的单测。
  *
- * 这里把「哪些节点能勾、勾了写入什么权限码」的规则钉死，
- * 因为这块直接决定谁能看到哪个菜单、谁能点哪个按钮，改错就是安全问题了。
+ * 结构（2026-10-19 最终版）：
+ *   系统功能 —— 管理能力（用户/角色/字典/表格配置/路由…）
+ *   菜单与按钮 —— 路由菜单；TABLE 路由下面挂这张表的按钮，
+ *                 CUSTOM 页面按 JSON 配置里的 `tcids` 挂对应表的按钮
+ *
+ * 前端角色页的 el-tree 开了 `check-strictly`（父子不联动）：
+ *   取消某个按钮只影响该按钮，不会把父菜单变成半选、也不会丢菜单权限。
+ *   所以这里允许「同一张表的按钮在多个入口下各出现一份」——它们指向同一个权限码，
+ *   保存时按权限码去重；关键约束是 **key 必须唯一**（否则 el-tree 勾选会串）。
  */
 describe("buildPermissionTree 权限树", () => {
   const routes = [
-    { id: "r-home", title: "首页", type: "CUSTOM" as const, path: "/home", accessType: "PUBLIC", sort: 1 },
-    { id: "r-order", title: "订单管理", type: "TABLE" as const, tcid: "TORDER", accessType: "ROLE", sort: 2 },
+    { id: "r-home", title: "首页", type: "CUSTOM" as const, accessType: "PUBLIC", sort: 1 },
+    { id: "r-order", title: "订单管理", type: "TABLE" as const, tcid: "TORDER0001", accessType: "ROLE", sort: 2 },
     {
       id: "r-order-detail",
       title: "订单详情",
@@ -24,26 +31,54 @@ describe("buildPermissionTree 权限树", () => {
       sort: 1,
     },
     { id: "r-open", title: "公开页面", type: "CUSTOM" as const, accessType: "PUBLIC", sort: 3 },
+    {
+      id: "r-page",
+      title: "自定义页面示例",
+      type: "CUSTOM" as const,
+      accessType: "ROLE",
+      // 自定义页面内嵌了哪些表，写在路由 JSON 配置的 tcids 里
+      config: { tcids: ["TORDER0001"] },
+      sort: 4,
+    },
+    {
+      id: "r-page-none",
+      title: "没有内嵌表格的页面",
+      type: "CUSTOM" as const,
+      accessType: "ROLE",
+      config: { title: "随便什么" },
+      sort: 5,
+    },
   ];
 
   const tableConfigs = [
     {
-      tcid: "TORDER",
+      tcid: "TORDER0001",
       name: "订单列表",
       operations: {
         create: true,
         update: true,
         delete: false,
-        createPermission: "data:create:TORDER",
+        createPermission: "data:create:TORDER0001",
         updatePermission: "",
         deletePermission: "",
       },
       customActions: [
-        { label: "标记发货", value: "ship", permission: "data:action:TORDER:ship" },
+        { label: "标记发货", value: "ship", permission: "data:action:TORDER0001:ship" },
         { label: "查看详情", value: "detail" },
       ],
     },
+    {
+      tcid: "TGOODS0001",
+      name: "商品列表",
+      operations: { create: true, update: true, delete: true },
+      customActions: [],
+    },
   ];
+
+  /** 路由级权限码：基础码 + :route:<routeId>（用户要求按路由区分权限） */
+  function scoped(base: string, routeId: string): string {
+    return `${base}:route:${routeId}`;
+  }
 
   function build() {
     return buildPermissionTree({ routes, tableConfigs });
@@ -58,7 +93,7 @@ describe("buildPermissionTree 权限树", () => {
     return null;
   }
 
-  it("顶层包含「系统功能」和「菜单与按钮」两个分组", () => {
+  it("顶层分成「系统功能 / 菜单与按钮」两个分组", () => {
     const { tree } = build();
     expect(tree.map((node) => node.title)).toEqual(["系统功能", "菜单与按钮"]);
   });
@@ -86,158 +121,104 @@ describe("buildPermissionTree 权限树", () => {
     expect(child.code).toBe("menu:r-order-detail");
   });
 
-  it("表格路由下挂按钮权限：开启的操作才有节点，关闭的（删除）没有", () => {
+  it("TABLE 菜单下面挂这张表的按钮：开启的操作有，关闭的（删除）没有", () => {
     const { tree } = build();
     const order = findNode(tree, "订单管理");
-    const buttonTitles = (order.children || []).map((node: any) => node.title);
+    const titles = order.children.map((node: any) => node.title);
 
-    expect(buttonTitles).toContain("新增（订单列表）");
-    expect(buttonTitles).toContain("修改（订单列表）");
-    expect(buttonTitles).not.toContain("删除（订单列表）");
+    expect(titles).toContain("新增（订单列表）");
+    expect(titles).toContain("修改（订单列表）");
+    expect(titles).not.toContain("删除（订单列表）"); // delete 被关闭
   });
 
-  it("按钮权限码优先用配置里的，没配则用按 TCID 生成的默认码", () => {
+  it("按钮权限码：配置优先，没配就用按 TCID 生成的默认码", () => {
     const { tree } = build();
     const order = findNode(tree, "订单管理");
-    const children = order.children || [];
+    const codes = order.children.map((node: any) => node.code);
 
-    const create = children.find((node: any) => node.title === "新增（订单列表）");
-    const update = children.find((node: any) => node.title === "修改（订单列表）");
-
-    expect(create.code).toBe("data:create:TORDER");
-    expect(update.code).toBe(tableOperationPermission("TORDER", "update"));
+    expect(codes).toContain(scoped("data:create:TORDER0001", "r-order")); // 配置里写死的
+    expect(codes).toContain(scoped(tableOperationPermission("TORDER0001", "update"), "r-order")); // 没配 → 默认码
   });
 
   it("自定义按钮：配了权限码的可勾选；没配的禁用并说明", () => {
     const { tree } = build();
     const order = findNode(tree, "订单管理");
-    const children = order.children || [];
 
-    const ship = children.find((node: any) => node.title === "标记发货（订单列表）");
-    const detail = children.find((node: any) => node.title === "查看详情（订单列表）");
-
-    expect(ship.code).toBe("data:action:TORDER:ship");
+    const ship = order.children.find((node: any) => node.title.startsWith("标记发货"));
     expect(ship.disabled).toBeFalsy();
+    expect(ship.code).toBe(scoped(tableActionPermission("TORDER0001", "ship"), "r-order"));
 
+    const detail = order.children.find((node: any) => node.title.startsWith("查看详情"));
     expect(detail.disabled).toBe(true);
     expect(detail.note).toContain("未配置权限码");
-    expect(detail.code).toBe(tableActionPermission("TORDER", "detail"));
   });
 
-  it("keyMap 覆盖所有节点，且 key 全局唯一", () => {
+  it("自定义页面按 JSON 配置的 tcids 挂对应表的按钮，并给出说明", () => {
+    const { tree } = build();
+    const page = findNode(tree, "自定义页面示例");
+
+    expect(page.note).toContain("页面内嵌表格：订单列表");
+    const titles = page.children.map((node: any) => node.title);
+    expect(titles).toContain("新增（订单列表）");
+    expect(titles).toContain("修改（订单列表）");
+    expect(page.children.map((node: any) => node.code)).toContain(scoped("data:create:TORDER0001", "r-page"));
+  });
+
+  it("没有声明 tcids 的自定义页面下面没有按钮、也不会有内嵌表格说明", () => {
+    const { tree } = build();
+    const page = findNode(tree, "没有内嵌表格的页面");
+    expect(page.note).not.toContain("页面内嵌表格");
+    expect(page.children).toHaveLength(0);
+  });
+
+  it("同一张表被两条路由引用时，各自生成【不同】的路由级权限码（互相独立）", () => {
     const { tree, keyMap } = build();
-    const keys: string[] = [];
 
-    function walk(nodes: any[]) {
-      for (const node of nodes) {
-        keys.push(node.key);
-        walk(node.children || []);
-      }
-    }
-    walk(tree);
+    // 订单管理（TABLE）和 自定义页面示例（CUSTOM，tcids 里也声明了这张表）
+    const order = findNode(tree, "订单管理");
+    const page = findNode(tree, "自定义页面示例");
+    const orderCreate = order.children.find((node: any) => node.title === "新增（订单列表）");
+    const pageCreate = page.children.find((node: any) => node.title === "新增（订单列表）");
 
-    expect(new Set(keys).size).toBe(keys.length);
-    for (const key of keys) expect(key).toHaveProperty;
-    for (const key of keys) expect(Object.prototype.hasOwnProperty.call(keyMap, key)).toBe(true);
-  });
+    expect(orderCreate.code).toBe(scoped("data:create:TORDER0001", "r-order"));
+    expect(pageCreate.code).toBe(scoped("data:create:TORDER0001", "r-page"));
+    // 关键：两个权限码不同 → 取消一个不会影响另一个
+    expect(orderCreate.code).not.toBe(pageCreate.code);
+    expect(orderCreate.key).not.toBe(pageCreate.key);
 
-  it("同一个权限码出现在多个节点时，key 自动加后缀区分", () => {
-    const routes2 = [
-      { id: "r-a", title: "表A菜单", type: "TABLE" as const, tcid: "TA" },
-      { id: "r-b", title: "表B菜单", type: "TABLE" as const, tcid: "TB" },
-    ];
-    const configs2 = [
-      { tcid: "TA", name: "表A", operations: { create: true, createPermission: "data:create" }, customActions: [] },
-      { tcid: "TB", name: "表B", operations: { create: true, createPermission: "data:create" }, customActions: [] },
-    ];
-
-    // functions 传空数组：只验证「菜单与按钮」部分，避免系统功能里的 data:create 混进来
-    const result = buildPermissionTree({ routes: routes2, tableConfigs: configs2, functions: [] });
     const allKeys: string[] = [];
     (function walk(nodes: any[]) {
       for (const node of nodes) {
         allKeys.push(node.key);
         walk(node.children || []);
       }
-    })(result.tree);
-
+    })(tree);
     expect(new Set(allKeys).size).toBe(allKeys.length);
-    const codes = Object.values(result.keyMap).filter((code) => code === "data:create");
-    expect(codes.length).toBe(2); // 两个节点指向同一个权限码，这是允许的
+    expect(keyMap[pageCreate.key]).toBe(scoped("data:create:TORDER0001", "r-page"));
   });
 
-  it("表格配置被删掉时给出提示节点，不抛错", () => {
-    const routes2 = [{ id: "r-x", title: "孤儿菜单", type: "TABLE" as const, tcid: "TDELETED" }];
-    const result = buildPermissionTree({ routes: routes2, tableConfigs: [] });
-    const node = findNode(result.tree, "孤儿菜单");
-    expect(node.children[0].disabled).toBe(true);
-    expect(node.children[0].title).toContain("已不存在");
-  });
-
-  it("系统功能按 group 做成二级树（主系统/路由/用户/角色/字典/表格配置）", () => {
+  it("系统功能按 group 做成二级树，且没有「表格数据」分组（读权限由菜单决定）", () => {
     const { tree } = build();
-
     const functionsGroup = tree.find((node) => node.title === "系统功能")!;
     const groupTitles = functionsGroup.children!.map((node) => node.title);
 
     expect(groupTitles).toContain("路由");
     expect(groupTitles).toContain("用户");
     expect(groupTitles).toContain("角色");
-    expect(groupTitles).toContain("字典");
     expect(groupTitles).toContain("表格配置");
+    expect(groupTitles).not.toContain("表格数据");
 
-    // 「路由」分组下面才是真正的权限叶子节点
     const routeGroup = functionsGroup.children!.find((node) => node.title === "路由")!;
-    expect(routeGroup.code).toBe("");
     expect(routeGroup.children!.map((node) => node.code)).toContain("route:read");
   });
 
-  it("全局表格数据权限不再出现在系统功能里（避免和具体表格的按钮权限重复）", () => {
-    const { tree } = build();
-
-    const allCodes: string[] = [];
-    (function walk(nodes: any[]) {
-      for (const node of nodes) {
-        if (node.code) allCodes.push(node.code);
-        walk(node.children || []);
-      }
-    })(tree);
-
-    // 这 4 个是需求 002 之前的全局码，现在只应该出现在「老表」的按钮节点上，
-    // 不应该再作为系统功能的一项出现（本 fixture 的 TORDER 用的是 data:create:TORDER）
-    expect(allCodes).not.toContain("data:read");
-    expect(allCodes).not.toContain("data:create");
-    expect(allCodes).not.toContain("data:update");
-    expect(allCodes).not.toContain("data:delete");
-
-    // 系统功能里也不应该再有「表格数据」这个分组
-    const functionsGroup = tree.find((node) => node.title === "系统功能")!;
-    expect(functionsGroup.children!.map((node) => node.title)).not.toContain("表格数据");
-  });
-
-  it("老表的全局权限码 / 重复权限码会给出说明（让「看起来重复」的节点自解释）", () => {
-    const routes2 = [{ id: "r-old", title: "老表菜单", type: "TABLE" as const, tcid: "TOLD" }];
-    const configs2 = [
-      {
-        tcid: "TOLD",
-        name: "老表",
-        operations: {
-          create: true,
-          createPermission: "data:create",
-          update: true,
-          updatePermission: "data:create",
-          delete: false,
-        },
-        customActions: [],
-      },
-    ];
-
-    const result = buildPermissionTree({ routes: routes2, tableConfigs: configs2, functions: [] });
-    const node = findNode(result.tree, "老表菜单");
-    const create = node.children.find((child: any) => child.title === "新增（老表）");
-    const update = node.children.find((child: any) => child.title === "修改（老表）");
-
-    expect(create.note).toContain("旧版全局权限码");
-    expect(update.note).toContain("同一个权限码");
+  it("表格配置不存在时给出提示节点，不抛错", () => {
+    const result = buildPermissionTree({
+      routes: [{ id: "r-x", title: "孤儿菜单", type: "TABLE" as const, tcid: "TDELETED" }],
+      tableConfigs: [],
+    });
+    const node = findNode(result.tree, "孤儿菜单");
+    expect(node.children[0].disabled).toBe(true);
+    expect(node.children[0].title).toContain("已不存在");
   });
 });

@@ -1,6 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import { RequirePermissions } from "../common/decorators";
 import { CurrentUser, SystemId } from "../common/param-decorators";
 import { JwtUser } from "../common/types";
 import { TableDataService } from "./table-data.service";
@@ -26,10 +25,14 @@ export class TableDataController {
   constructor(private readonly service: TableDataService) {}
 
   /** 渲染配置：<Table :tcid="xxx" /> 一进页面就先调这个 */
-  @RequirePermissions("data:read")
   @Get(":tcid/config")
-  config(@SystemId() systemId: string, @Param("tcid") tcid: string, @CurrentUser() user: JwtUser) {
-    return this.service.renderConfig(systemId, tcid, user);
+  config(
+    @SystemId() systemId: string,
+    @Param("tcid") tcid: string,
+    @CurrentUser() user: JwtUser,
+    @Headers("x-route-id") routeId?: string,
+  ) {
+    return this.service.renderConfig(systemId, tcid, user, routeId);
   }
 
   /**
@@ -37,17 +40,20 @@ export class TableDataController {
    * filters 是 JSON 字符串，形如：
    *   {"conditions":[{"field":"status","op":"eq","value":"paid"}]}
    * CUSTOM 模式下可以传 group 做任意 AND/OR/NOT 嵌套。
+   *
+   * 读权限不再用全局 data:read 卡：能不能读这张表由「对应菜单有没有勾」决定，
+   * 具体判断在 TableDataService.assertCanReadTable（纯函数有单测）。
    */
-  @RequirePermissions("data:read")
   @Get(":tcid/data")
   list(
     @SystemId() systemId: string,
     @Param("tcid") tcid: string,
+    @CurrentUser() user: JwtUser,
     @Query("page") page?: string,
     @Query("pageSize") pageSize?: string,
     @Query("filters") filters?: string,
   ) {
-    return this.service.query(systemId, tcid, { page, pageSize, filters });
+    return this.service.query(systemId, tcid, { page, pageSize, filters }, user);
   }
 
   @Post(":tcid/data")
@@ -56,8 +62,9 @@ export class TableDataController {
     @Param("tcid") tcid: string,
     @CurrentUser() user: JwtUser,
     @Body() body: Record<string, any>,
+    @Headers("x-route-id") routeId?: string,
   ) {
-    return this.service.create(systemId, tcid, user, body);
+    return this.service.create(systemId, tcid, user, body, routeId);
   }
 
   @Patch(":tcid/data/:id")
@@ -67,8 +74,9 @@ export class TableDataController {
     @Param("id") id: string,
     @CurrentUser() user: JwtUser,
     @Body() body: Record<string, any>,
+    @Headers("x-route-id") routeId?: string,
   ) {
-    return this.service.update(systemId, tcid, id, user, body);
+    return this.service.update(systemId, tcid, id, user, body, routeId);
   }
 
   @Delete(":tcid/data/:id")
@@ -77,7 +85,8 @@ export class TableDataController {
     @Param("tcid") tcid: string,
     @Param("id") id: string,
     @CurrentUser() user: JwtUser,
+    @Headers("x-route-id") routeId?: string,
   ) {
-    return this.service.remove(systemId, tcid, id, user);
+    return this.service.remove(systemId, tcid, id, user, routeId);
   }
 }

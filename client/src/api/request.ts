@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
+import { getCurrentRouteId } from "./route-context";
 import { ElMessage } from "element-plus";
 
 /**
@@ -39,6 +40,13 @@ request.interceptors.request.use((config) => {
   const systemCode = localStorage.getItem(SYSTEM_CODE_KEY);
   if (systemCode) {
     config.headers.set("X-System-Code", systemCode);
+  }
+
+  // 当前动态路由 id：后端用它判断「这个路由下的按钮权限」
+  //（权限码是 `<基础码>:route:<routeId>`，同一张表在不同路由下是两个独立权限）
+  const routeId = getCurrentRouteId();
+  if (routeId) {
+    config.headers.set("X-Route-Id", routeId);
   }
   return config;
 });

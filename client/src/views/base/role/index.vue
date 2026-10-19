@@ -46,8 +46,9 @@
           <div class="tree-box">
             <div class="tree-toolbar">
               <span class="text-muted">
-                勾选即可授权：菜单节点 = 能看到该菜单（仅「按角色控制」的菜单需要勾），按钮节点 = 能操作那张表的数据。
-                旧版全局「表格数据」权限已合并到各表格菜单下，不在这里重复显示（保存时会保留）。
+                勾选即可授权：菜单 = 能看到这个菜单（TABLE 菜单同时可读该表数据），菜单下的按钮 =
+                在<b>这个路由下</b>能操作那张表。
+                按钮权限按路由区分：同一张表挂在两条路由下时是两个独立权限，取消一个不影响另一个。父子不联动，按钮也不影响菜单。
               </span>
               <el-space>
                 <el-button link type="primary" size="small" @click="checkAll">全选可授权项</el-button>
@@ -61,6 +62,7 @@
               node-key="key"
               show-checkbox
               default-expand-all
+              check-strictly
               :props="treeProps"
               class="perm-tree"
               :empty-text="treeLoading ? '加载权限树…' : '当前系统还没有可配置的菜单'"
@@ -217,8 +219,17 @@ async function submit(): Promise<void> {
     return;
   }
 
-  // 从树上取勾选结果，再映射回权限码（去重：同一权限码可能挂在多个节点上）
-  const checkedKeys: string[] = treeRef.value?.getCheckedKeys() || [];
+  // 从树上取勾选结果，再映射回权限码（去重：同一权限码可能挂在多个节点上）。
+  //
+  // 为什么要连 halfChecked 一起取：
+  //   el-tree 父子联动时，如果只勾了父节点的一部分子节点，父节点会变成「半选」，
+  //   getCheckedKeys() 不包含半选节点。之前只取 checked → 管理员「取消一个按钮」后，
+  //   父节点的权限码被静默丢掉，表现成「只想关掉一个按钮，结果整个菜单没了」。
+  //   半选节点里只有分组（code 为空）和菜单（code 有值）两种，分组会被 filter(Boolean) 过滤掉。
+  const checkedKeys: string[] = [
+    ...(treeRef.value?.getCheckedKeys() || []),
+    ...(treeRef.value?.getHalfCheckedKeys() || []),
+  ];
   const checkedCodes = [...new Set(checkedKeys.map((key) => keyMap.value[key]).filter(Boolean))];
 
   // 树上看不到的旧权限码要保留：比如老表格用的全局 data:create 已经从树里移除了。

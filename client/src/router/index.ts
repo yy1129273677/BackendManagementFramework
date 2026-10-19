@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory, RouteRecordRaw } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { useMenuStore } from "@/stores/menu";
+import { setCurrentRouteId } from "@/api/route-context";
 
 /**
  * 路由配置。
@@ -156,9 +157,16 @@ export async function setupDynamicRoutes(router: any): Promise<void> {
       meta: {
         title: item.title,
         icon: item.icon || "Menu",
+        // 动态路由 id：请求头 X-Route-Id 用，后端据此判断「本路由下的按钮权限」
+        //（同一张表在两条路由下是两个独立权限码）
+        routeId: item.id,
         tcid: item.tcid || "",
         type: item.type,
-        permission: item.permissionCode || "",
+        // 动态路由不做前端权限校验：能拿到这条路由，说明后端 /routes/my 已经按
+        // `menu:<routeId>` 过滤过了（server 是唯一数据源）。
+        // 千万不要再用老字段 permissionCode——老数据里残留的 "read" 会把菜单挡成
+        // 「点了没反应 / 回到首页」（踩过坑：user1 的订单管理）。
+        permission: "",
         accessType: item.accessType || "PUBLIC",
         routeConfig,
         dynamic: true,
@@ -237,6 +245,8 @@ router.beforeEach(async (to) => {
 router.afterEach((to) => {
   const title = to.meta?.title ? `${to.meta.title} - 后台管理框架` : "后台管理框架";
   document.title = String(title);
+  // 记录当前动态路由 id，请求拦截器会带进 X-Route-Id（静态页面传空）
+  setCurrentRouteId(to.meta?.routeId ? String(to.meta.routeId) : "");
 });
 
 /** 退出登录或切换子系统时，需要重置动态路由的加载标记 */

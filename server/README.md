@@ -398,9 +398,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-test.ps1 `
    `server/.env` 和部署用的根 `.env` 里都有 `JWT_SECRET`，上线前必须换成长随机串：
    `openssl rand -hex 32`。改了它，所有已登录用户都会掉线，需要重新登录（正常现象）。
 
-3. **权限是登录时的快照**
-   权限码签在 token 里，改了角色权限后**用户需要重新登录**才生效。
-   这是有意的取舍（每个请求都查库会更慢）。如果要「立刻生效」，得改成守卫里查库。
+3. **权限是实时查库的（2026-10-19 起）**
+   token 只承载「你是谁」；每次请求 `JwtStrategy.validate` 会按 `user.sub` 查一次
+   `sys_user + sys_role + sys_system` 算出**最新权限**，挂到 `request.user.permissions`。
+   所以：**改完角色权限，用户刷新页面（F5）就能看到新菜单/新按钮，不需要重新登录**；
+   账号被停用也会在下一次请求立即失效（不用等 token 过期）。
+   代价是每个请求多一次主键查询（很轻），换来权限变更实时生效。
 
 4. **DDL 只做加法**
    - 加字段：`ADD COLUMN`，列可空，不影响老数据
@@ -514,37 +517,82 @@ npm run format   # 格式化整个仓库
 
 ### 10.6 权限树的结构（2026-10-19 微调）
 
-`GET /api/roles/permission-tree` 返回的树：
+`GET /api/roles/permission-tree` 返回的树（两组）：
 
 ```
 系统功能（按 ALL_PERMISSIONS.group 二级分组）
 ├ 主系统 → 子系统管理
 ├ 路由   → 查看/新建/修改/删除路由
-├ 用户   → 查看/新建/修改/删除用户
-├ 角色   → …
-├ 字典   → …
-└ 表格配置 → …
+├ 用户 / 角色 / 字典 / 表格配置 → …
 菜单与按钮
-├ 订单管理（accessType=ROLE 才可勾）
-│  ├ 新增（订单列表）= data:create:TORDER      ← 新表的按 TCID 权限码
-│  ├ 修改（订单列表）
-│  ├ 删除（订单列表）
-│  └ 标记发货（订单列表）= data:action:TORDER:ship
-├ 老表菜单（accessType=ROLE）
-│  └ 新增（老表）= data:create   note: 旧版全局权限码，所有用这个码的表都会受影响
-└ 公开菜单（disabled，标注「公开菜单（登录即可见）」）
+├ 订单管理（accessType=ROLE 才可勾）   note: 勾选后能看到菜单 + 可读该表数据
+│  ├ 新增 = data:create:TORDER:route:<routeId>   ← 按路由区分的权限码
+│  ├ 修改 / 删除
+│  ├ 标记发货 = data:action:TORDER:ship:route:<routeId>
+│  └ 查看详情（没配权限码 → disabled，所有人可见）
+├ 自定义页面示例（ROLE）               note: 页面内嵌表格：订单列表
+│  └ 按 config.tcids 挂该表的按钮，权限码同样是 ...:route:<本页routeId>
+└ 公开页面（disabled，标注「公开菜单（登录即可见）」）
 ```
 
 三条规则：
 
-1. **「表格数据」这一组（全局 `data:read/create/update/delete`）不再放进系统功能**。
-   按钮权限只在各自表格下出现，否则老表用的是全局码，会和系统功能里的同名项"看起来重复"。
+1. **按钮挂在菜单下面，父子不联动；而且权限码按路由区分**：
+   前端角色页 el-tree 开了 `check-strictly`，勾/取消某个按钮只影响该按钮本身。
+   权限码格式是 `<基础码>:route:<routeId>`，所以同一张表挂在两条路由下时是**两个独立权限**，
+   取消一条路由下的按钮不影响另一条（用户明确要求）。
+   前端请求拦截器会带 `X-Route-Id` 请求头，后端用 `src/common/permission-scope.ts` 判断：
+   认路由级码，也兼容老的基础码（`data:create:TORDER`，表示所有路由通用）。
 2. 老表（需求 002 之前创建）的按钮节点会带 `note`：说明这是旧版全局码、影响所有用该码的表。
 3. 同一张表里多个按钮共用一个权限码时（比如自定义按钮配了 `data:update`），
    第二个节点会带 `note`：「与「修改（订单列表）」是同一个权限码，勾一个两个都会生效」。
 
-> 角色编辑保存时，前端会把「树上不存在的旧权限码」原样保留
-> （`client/src/views/base/role/index.vue` 的 `legacyCodes`），避免打开旧角色点保存就把老权限删掉。
+> 角色编辑保存时：
+>
+> - 会同时提交 `getCheckedKeys()` 和 `getHalfCheckedKeys()`（防御性：即使将来又出现半选节点，
+>   也不会把父节点的权限码静默丢掉）
+> - 前端会把「树上不存在的旧权限码」原样保留（`legacyCodes`），避免打开旧角色点保存就删权限
+
+### 10.6.1 自定义页面里内嵌的表格（需求 004）
+
+自定义页面（CUSTOM 路由）里可以写一个或多个 `<Table>`：
+
+```vue
+<Table :tcid="ORDER_TCID" />
+<Table :tcid="'TGOODS0001'" />
+```
+
+CUSTOM 路由表里没有 `tcid`，所以**在路由的 JSON 配置里声明**这个页面用了哪些表：
+
+```json
+{ "title": "订单中心", "pageSize": 50, "tcids": ["TDEMOORDERS", "TGOODS0001"] }
+```
+
+保存时（`src/route/route.service.ts`）会校验：兼容 `tcids` / `TCIDS`、自动转大写去重、
+最多 50 个、每项必须是当前子系统的 TCID（写错直接 400 并指出是哪一项）。
+
+| 能力         | 说明                                                                              |
+| ------------ | --------------------------------------------------------------------------------- |
+| 读           | 勾了该自定义页面的菜单 → 页面里 `tcids` 声明的表都能读（`table-data.service.ts`） |
+| 增删改       | 页面菜单节点下面挂 `tcids` 中每张表的新增/修改/删除/自定义按钮，可单独勾          |
+| 页面节点说明 | 会显示「页面内嵌表格：订单列表」                                                  |
+
+解析逻辑在 `src/route/route-tcids.ts`（纯函数 + 单测，`declaredTcids` 宽松读、`normalizeConfigTcids` 严格校验）。
+
+> **改了自定义页面里的 `<Table :tcid>` 后，记得同步改路由的 JSON 配置 `tcids`**，
+> 否则权限树/读权限还是旧的。前端路由编辑弹窗里有「插入 tcids 模板」按钮。
+
+### 10.6.1 菜单可见性规则（`canSeeRoute`，有单测）
+
+| 路由 accessType | 谁能看到                                                                             |
+| --------------- | ------------------------------------------------------------------------------------ |
+| （超管）        | 全部                                                                                 |
+| `ROLE`          | 角色里有 `menu:<routeId>` 才可见；**忽略老字段 `permissionCode`**                    |
+| `PUBLIC`        | 登录即可见；老数据若还配着 `permissionCode`，继续按它控制（兼容需求 002 之前的配置） |
+
+> 踩过的坑：`ROLE` 路由如果继续校验老 `permissionCode`（老数据残留 `"read"`），
+> 会出现「角色勾了菜单、`menu:<id>` 也有，但菜单死活不显示」。已修复并加回归单测
+> （`src/route/route-visibility.ts` + `.spec.ts`）。
 
 ### 10.7 权限码迁移脚本（把老表迁成按 TCID）
 
@@ -572,7 +620,7 @@ npm run migrate:002
 
 **性质**：幂等（第二次跑显示"无需迁移"）、单事务、dry-run 可预览。
 **风险与准备**：会改角色权限，执行前先 `pg_dump` 备份（见 DEPLOY.md 7.2）；
-执行后让相关账号**重新登录**（权限签在 token 里，旧 token 还是老权限）。
+执行后让相关用户**刷新页面**即可（权限每次请求实时查库，不需要重新登录）。
 
 > 新环境不用跑：`npm run seed` 现在直接创建按 TCID 的权限码。
 

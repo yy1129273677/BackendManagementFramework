@@ -3,6 +3,8 @@ import { hasPermission } from "../common/permissions";
 import { JwtUser } from "../common/types";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateRouteDto, UpdateRouteDto } from "./route.dto";
+import { normalizeConfigTcids } from "./route-tcids";
+import { canSeeRoute } from "./route-visibility";
 
 /** 路由路径合法格式：/ 开头，只允许字母、数字、-、_、/ */
 const PATH_PATTERN = /^\/[A-Za-z0-9_\-/]*$/;
@@ -36,12 +38,14 @@ export class RouteService {
   /**
    * 当前用户能看到的路由（前端登录后生成菜单用）。
    *
-   * 过滤规则（按顺序）：
-   *   1. visible = false 的不返回
-   *   2. 超管不过滤
-   *   3. accessType = ROLE 的菜单：用户必须有 `menu:<routeId>` 权限
-   *      （这个权限码由「角色管理 → 权限树」勾选产生，不需要手填）
-   *   4. 历史字段 permissionCode 如果配了，仍然要求具备该权限码（兼容老数据）
+   * 过滤规则写在纯函数 `canSeeRoute` 里（有单测），这里只负责查数据和拼结果：
+   *   - accessType=ROLE：要求 `menu:<routeId>`（权限树勾选产生），**忽略老字段 permissionCode**
+   *   - accessType=PUBLIC：登录即可见；老数据如果配了 permissionCode，继续按它控制
+   *
+   * 为什么忽略 ROLE 路由的 permissionCode：
+   *   这个字段在需求 002 之后已经不能编辑了，但老数据里还留着（比如 orders 路由上是 "read"）。
+   *   如果继续校验，就会出现「角色里勾了菜单、menu:<id> 也有了，菜单还是不显示」——
+   *   线上已实际踩过（user1 的订单管理菜单被 permissionCode=read 挡住）。
    */
   async myRoutes(user: JwtUser, systemId: string) {
     const all = await this.prisma.route.findMany({
@@ -49,21 +53,7 @@ export class RouteService {
       orderBy: [{ sort: "asc" }, { createdAt: "asc" }],
     });
 
-    const list = all.filter((route) => {
-      if (user.isSuper) return true;
-
-      // 新逻辑：按角色勾选的菜单权限
-      if (route.accessType === "ROLE") {
-        if (!hasPermission(user.permissions, false, `menu:${route.id}`)) return false;
-      }
-
-      // 兼容逻辑：老数据里手填的权限码
-      if (route.permissionCode && !hasPermission(user.permissions, false, route.permissionCode)) {
-        return false;
-      }
-
-      return true;
-    });
+    const list = all.filter((route) => canSeeRoute(route, user.permissions, user.isSuper));
 
     return { list };
   }
@@ -188,6 +178,30 @@ export class RouteService {
       if (JSON.stringify(config).length > 20000) {
         throw new BadRequestException("JSON 配置太大了（上限 20KB），请拆分");
       }
+    }
+
+    // 自定义页面可以在 JSON 里声明「页面内嵌了哪些表格」：
+    //   {"tcids": ["TDEMOORDERS"]}
+    // 读权限和权限树都依赖它（见 route-tcids.ts）。
+    // 这里顺便校验 TCID 归属，写错时直接报错，比"页面里的表格莫名其妙 403"好排查。
+    if (config && typeof config === "object" && !Array.isArray(config)) {
+      const tcids = normalizeConfigTcids(config);
+      for (const code of tcids) {
+        const exists = await this.prisma.tableConfig.findFirst({
+          where: { tcid: code, systemId },
+          select: { id: true },
+        });
+        if (!exists) {
+          throw new BadRequestException(`JSON 配置里的 tcids「${code}」不存在或不属于当前子系统`);
+        }
+      }
+
+      // 统一存成小写 tcids，去掉别名 TCIDS，避免同一份配置出现两套写法
+      const nextConfig: Record<string, any> = { ...config };
+      delete nextConfig.TCIDS;
+      if (tcids.length > 0) nextConfig.tcids = tcids;
+      else delete nextConfig.tcids;
+      config = Object.keys(nextConfig).length > 0 ? nextConfig : null;
     }
 
     return {

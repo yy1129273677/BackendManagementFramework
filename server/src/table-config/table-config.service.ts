@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { hasPermission } from "../common/permissions";
+import { hasRouteScopedPermission } from "../common/permission-scope";
 import { JwtUser } from "../common/types";
 import { PrismaService } from "../prisma/prisma.service";
 import { DdlService } from "./ddl.service";
@@ -234,14 +235,16 @@ export class TableConfigService {
    *   已经把「表格是否开启该操作」和「用户是否有权限码」两个条件合并好了，
    *   前端不需要自己算，直接 v-if="config.operations.create" 就行。
    */
-  async renderConfig(systemId: string, tcid: string, user: JwtUser) {
+  async renderConfig(systemId: string, tcid: string, user: JwtUser, routeId?: string) {
     const config = await this.getByTcid(systemId, tcid);
     const fields = (config.fields || []) as unknown as TableField[];
     const operations = (config.operations || {}) as TableOperations;
     const customActions = (config.customActions || []) as unknown as CustomAction[];
 
+    // 权限按路由区分：同一张表在「订单管理」和「自定义页面示例」下是两个独立权限
+    //（权限树生成的是 `<基础码>:route:<routeId>`；老的基础码仍然兼容所有路由）。
     const allowed = (permission?: string) =>
-      !permission || hasPermission(user?.permissions, Boolean(user?.isSuper), permission);
+      hasRouteScopedPermission(user?.permissions, Boolean(user?.isSuper), permission, routeId);
 
     const canCreate = operations.create !== false && allowed(operations.createPermission);
     const canUpdate = operations.update !== false && allowed(operations.updatePermission);

@@ -410,3 +410,42 @@ registerValidator("endAfterStart", (value, formModel) => {
 它负责 init / `setOption` / `ResizeObserver` 自适应 / 卸载时 dispose，页面只管拼 option。
 数据来自 `statsApi.overview()` / `statsApi.system()`（后端 `src/stats/`）。
 **子系统视角不再有搭建步骤和连接状态**，只有图表。
+
+---
+
+## 10. 权限与刷新（不用重新登录）
+
+权限是**实时查库**的（后端 `JwtStrategy.validate` 每次请求按用户 id 重算），
+所以管理员改完角色权限后：
+
+- 用户**按 F5 刷新页面**就能看到新菜单、新按钮，**不需要退出重新登录**
+- 账号被停用，下一次请求直接 401
+- 前端刷新时的顺序是：`fetchProfile()`（拿最新权限）→ `menuStore.load()`（`/routes/my` 按最新权限过滤）→ 重新注册动态路由
+
+另外，**勾了菜单就等于能读这张表的数据**（后端 `table-data/read-access.ts`），
+权限树里没有单独的「读取所有表格数据」开关。
+
+### 自定义页面里嵌表格（需求 004）
+
+自定义页面可以写一个或多个 `<Table :tcid="...">`：
+
+```vue
+<Table :tcid="ORDER_TCID" />
+<Table :tcid="'TGOODS0001'" />
+```
+
+CUSTOM 路由在数据库里没有 `tcid` 字段，所以要在**路由的 JSON 配置**里声明这个页面用了哪些表：
+
+```json
+{ "title": "订单中心", "tcids": ["TDEMOORDERS", "TGOODS0001"] }
+```
+
+（「路由管理 → 编辑路由 → JSON 配置」里有「插入 tcids 模板」按钮，会保留已有配置只补 `tcids`。）
+
+效果：
+
+- 勾了该页面的菜单 → 页面里 `tcids` 声明的表格都能读
+- 增删改按钮挂在该页面菜单下面，可单独勾（el-tree 父子不联动，取消按钮不影响菜单）
+- 保存时会校验：`tcids` 必须是数组、每项是合法 TCID 且属于当前子系统，否则报 400
+
+**改了页面里的 `<Table :tcid>` 之后，记得回路由管理同步改 JSON 配置里的 `tcids`。**

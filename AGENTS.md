@@ -47,7 +47,7 @@ npm install
 npx prisma migrate deploy        # 建表
 npm run seed                     # 造超管 + demo 数据
 npm run start:dev                # 开发，端口 3000
-npm test                         # 84 个单测，不需要数据库
+npm test                         # 130 个单测，不需要数据库
 npm run build                    # prisma generate + nest build
 npm run migrate:002:dry          # 权限码迁移预览（老表全局码 → 按 TCID，幂等）
 npm run migrate:002              # 执行迁移（单事务，失败回滚）
@@ -231,32 +231,66 @@ docs/
 
 ## 9. 需求 002 之后的约定（重要）
 
-1. **权限码是动态的**：`menu:<routeId>`、`data:create:<tcid>`、`data:action:<tcid>:<value>`。
+1. **权限码是动态的，且表格按钮权限「按路由区分」**：
+   `menu:<routeId>`、`data:create:<tcid>`（老的基础码）、
+   **`data:create:<tcid>:route:<routeId>`（权限树生成的新格式）**。
+   同一张表被多条路由引用时，每条路由生成独立权限码，取消一条路由下的按钮不影响另一条。
+   前端请求拦截器会把当前动态路由 id 放进 `X-Route-Id` 请求头，
+   后端用 `server/src/common/permission-scope.ts`（纯函数 + 单测）判断：
+   认 `:route:<routeId>` 后缀，也兼容老的基础码（表示所有路由通用）。
    **不要再用「`ALL_PERMISSIONS` 固定白名单」过滤角色权限**——踩过坑：新权限码被静默丢掉，
    表现为"勾了权限却不生效"。角色权限只做格式校验（`role.service.normalizePermissions`）。
 
-2. **权限树是唯一录入入口**：新增菜单/按钮权限节点要改
+2. **权限实时生效，不要依赖 token 快照**：token 只证明身份；`JwtStrategy.validate`
+   每次请求按 `user.sub` 查库（`auth/jwt-user.ts` 纯函数 + 单测）算出最新权限。
+   所以**改完角色权限，用户刷新页面（F5）就能看到新菜单/按钮，不需要重新登录**；
+   这是用户明确要求的行为，别再退回「权限快照」。
+
+3. **读权限 = 勾了菜单就能读，没有单独的全局读开关**：
+   表格数据接口（`/table/:tcid/config`、`/table/:tcid/data`）的读权限由
+   `server/src/table-data/read-access.ts`（纯函数 + 单测）判断：
+   超管 / 命中该表菜单（`menu:<routeId>` 或公开菜单）即可读；
+   老角色残留的全局 `data:read` 仍然兼容放行。
+   所以权限树里**没有「表格数据」分组**，不要再加回来。
+
+4. **权限树是唯一录入入口**：新增菜单/按钮权限节点要改
    `server/src/role/permission-tree.ts`，并补 `permission-tree.spec.ts`；
    前端角色页直接用后端返回的 `{tree, keyMap}`，不要自己拼权限码。
-   树的形状：系统功能按 `ALL_PERMISSIONS.group` 二级分组；**全局 `data:*`（表格数据）不进树**，
-   按钮权限只在各自表格下出现（老表用全局码时节点带说明），避免"看起来重复"。
+   树的结构（两组）：
+   - **系统功能**：按 `ALL_PERMISSIONS.group` 二级分组（表格数据组除外）
+   - **菜单与按钮**：菜单节点；TABLE 菜单下面挂这张表的按钮，
+     CUSTOM 页面按 JSON 配置里的 `tcids` 挂对应表的按钮。
+     **按钮权限码 = `<基础码>:route:<routeId>`**（每条路由独立，见第 1 条）。
+     角色页 el-tree **必须开 `check-strictly`（父子不联动）**：
+     这样勾/取消某个按钮只影响该按钮本身，不会把父菜单变成半选、也不会丢菜单权限。
+     保存时除了 `getCheckedKeys()` 还带上 `getHalfCheckedKeys()`（防御性，见 `role/index.vue`）。
+     菜单可见性规则在 `server/src/route/route-visibility.ts`（有单测）：
+     `ROLE` 路由只看 `menu:<routeId>`，**别再校验老字段 `permissionCode`**（已踩坑）。
 
-3. **老数据迁移用脚本，不用 SQL 硬改**：全局 `data:create/update/delete` → `data:<op>:<tcid>`
+4.1 **自定义页面里嵌表格（需求 004）**：CUSTOM 路由的页面里写了 `<Table :tcid="...">`（可以多个）时，
+要在该路由的 JSON 配置里声明用了哪些表：`{"tcids": ["TDEMOORDERS"]}`。
+读权限按「勾了这个页面菜单」放行，页面节点说明里会注明「页面内嵌表格：xxx」，
+页面节点下面会挂这些表的增删改按钮（可单独勾）。
+校验/解析在 `server/src/route/route-tcids.ts`（纯函数 + 单测；保存路由时校验格式和 TCID 归属）。
+**改了页面里的 `<Table :tcid>` 要同步改路由的 `tcids` 配置**（前端路由弹窗有「插入 tcids 模板」按钮）。
+不要再引入「扫描源码生成映射」那套（已按用户要求移除，见 docs/requirements/004）。
+
+5. **老数据迁移用脚本，不用 SQL 硬改**：全局 `data:create/update/delete` → `data:<op>:<tcid>`
    的迁移逻辑在 `server/src/role/permission-migration.ts`（纯函数 + 单测），
    入口 `npm run migrate:002[:dry]`（幂等、dry-run、单事务）。改迁移规则要同步补单测，
    并且**新数据一律走新格式**（`normalizeFields` / `defaultOperationsForTcid`），别再产生全局码。
 
-4. **路由 `config` 只注入 CUSTOM 页面**（`props.routeConfig`），表格页面不注入。
+6. **路由 `config` 只注入 CUSTOM 页面**（`props.routeConfig`），表格页面不注入。
    注入逻辑在 `client/src/router/index.ts` 的 `setupDynamicRoutes`。
 
-5. **表格字段的表单属性**：`listSort / searchSort / formSort / formVisible / formSpan / rules`，
+7. **表格字段的表单属性**：`listSort / searchSort / formSort / formVisible / formSpan / rules`，
    后端 `normalizeFields` 负责默认值和校准（`formSpan` 限制 1~24、正则必须能编译），
    前端 `<Table>` 负责按它排序、24 栅格布局、校验。
 
-6. **校验规则只存「正则字符串 + 校验器名字」**，**禁止把 JS 代码存数据库执行**；
+8. **校验规则只存「正则字符串 + 校验器名字」**，**禁止把 JS 代码存数据库执行**；
    自定义校验函数写在 `client/src/components/table/validators.ts`，用 `registerValidator` 注册。
 
-7. **表格的「界面配置」存 `sys_table_config.config`（可空 JSON）**：
+9. **表格的「界面配置」存 `sys_table_config.config`（可空 JSON）**：
    目前只有 `table.height`、`form.dialog.width / height` 三个键，单位像素；
    后端 `normalizeTableUiConfig` 负责校验（**不认识的 key 一律报错**，防止把 height 拼错后静默失效），
    前端默认值在 `client/src/components/table/types.ts` 的 `DEFAULT_TABLE_UI_CONFIG`。
@@ -264,5 +298,5 @@ docs/
    所以以后往这段 JSON 里加新键不用给老数据做迁移；键的优先级是
    `组件 prop > 后台配置 > 内置默认`。
 
-8. **需求文档流程**：需求先出「整理版」（`docs/requirements/00X-...-整理版.md`，含我的判断与待确认点），
-   确认后再开发、回填实现对照，并删掉原始需求文件。
+10. **需求文档流程**：需求先出「整理版」（`docs/requirements/00X-...-整理版.md`，含我的判断与待确认点），
+    确认后再开发、回填实现对照，并删掉原始需求文件。

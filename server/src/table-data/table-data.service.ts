@@ -6,7 +6,10 @@ import { JwtUser } from "../common/types";
 import { PrismaService } from "../prisma/prisma.service";
 import { TableConfigService } from "../table-config/table-config.service";
 import { TableField, TableOperations } from "../table-config/table-field.types";
+import { hasRouteScopedPermission } from "../common/permission-scope";
+import { canReadTable } from "./read-access";
 import { buildWhereClause } from "./search-builder";
+import { declaredTcids } from "../route/route-tcids";
 
 /** 查询参数 */
 export interface QueryParams {
@@ -38,8 +41,42 @@ export class TableDataService {
   ) {}
 
   /** 前端渲染配置（哪些列、哪些搜索项、哪些按钮） */
-  async renderConfig(systemId: string, tcid: string, user: JwtUser) {
-    return this.configService.renderConfig(systemId, tcid, user);
+  async renderConfig(systemId: string, tcid: string, user: JwtUser, routeId?: string) {
+    // 连「渲染配置」都要先确认能看这张表，否则未授权用户能拿到字段定义
+    await this.assertCanReadTable(systemId, tcid, user);
+    // routeId 用来判断「这个路由下的按钮权限」（按路由区分，见 common/permission-scope.ts）
+    return this.configService.renderConfig(systemId, tcid, user, routeId);
+  }
+
+  /**
+   * 校验「当前用户能不能读这张表的数据」。
+   *
+   * 规则（用户要求）：**勾了这张表对应的菜单 → 就能读**，
+   * 不再要求单独勾一个「读取表格数据（所有表）」的全局权限码。
+   *
+   * 具体判断交给纯函数 canReadTable（有单测），这里只负责查「这张表绑了哪些菜单」。
+   * 老角色上残留的全局 data:read 仍然放行（兼容需求 002 之前的配置）。
+   */
+  private async assertCanReadTable(systemId: string, tcid: string, user: JwtUser): Promise<void> {
+    if (canReadTable([], user.permissions || [], Boolean(user.isSuper))) return;
+
+    // 1) 直接绑这张表的菜单（TABLE 路由）
+    const tableRoutes = await this.prisma.route.findMany({
+      where: { systemId, tcid },
+      select: { id: true, accessType: true, visible: true },
+    });
+
+    // 2) 自定义页面在 JSON 配置里声明了内嵌这张表（config.tcids）：
+    //    勾了自定义页面的菜单，页面里的表格也应该能读。
+    const customRoutes = await this.prisma.route.findMany({
+      where: { systemId, type: "CUSTOM" },
+      select: { id: true, accessType: true, visible: true, config: true },
+    });
+    const embeddedRoutes = customRoutes.filter((route) => declaredTcids(route.config).includes(tcid));
+
+    if (canReadTable([...tableRoutes, ...embeddedRoutes], user.permissions || [], Boolean(user.isSuper))) return;
+
+    throw new ForbiddenException("没有查看这张表的权限：请让管理员在角色里勾选对应的菜单");
   }
 
   /**
@@ -53,7 +90,10 @@ export class TableDataService {
    * 返回：
    *   { list, total, page, pageSize }
    */
-  async query(systemId: string, tcid: string, params: QueryParams) {
+  async query(systemId: string, tcid: string, params: QueryParams, user: JwtUser) {
+    // 先确认「能看这张表」：勾了对应菜单即可，不再依赖全局 data:read
+    await this.assertCanReadTable(systemId, tcid, user);
+
     const config = await this.configService.getByTcid(systemId, tcid);
     const fields = (config.fields || []) as unknown as TableField[];
 
@@ -107,10 +147,10 @@ export class TableDataService {
    *   3. 必填字段是否都填了
    *   4. 只接受配置里 editable 的字段（防止绕过表单写隐藏字段）
    */
-  async create(systemId: string, tcid: string, user: JwtUser, body: Record<string, any>) {
+  async create(systemId: string, tcid: string, user: JwtUser, body: Record<string, any>, routeId?: string) {
     const config = await this.configService.getByTcid(systemId, tcid);
     const operations = (config.operations || {}) as TableOperations;
-    this.assertOperation(user, operations, "create");
+    this.assertOperation(user, operations, "create", routeId);
 
     const fields = (config.fields || []) as unknown as TableField[];
     const editable = fields.filter((field) => field.editable !== false);
@@ -150,11 +190,11 @@ export class TableDataService {
   }
 
   /** 修改一条数据（只改传了的、且允许编辑的字段） */
-  async update(systemId: string, tcid: string, id: string, user: JwtUser, body: Record<string, any>) {
+  async update(systemId: string, tcid: string, id: string, user: JwtUser, body: Record<string, any>, routeId?: string) {
     this.assertUuid(id);
     const config = await this.configService.getByTcid(systemId, tcid);
     const operations = (config.operations || {}) as TableOperations;
-    this.assertOperation(user, operations, "update");
+    this.assertOperation(user, operations, "update", routeId);
 
     const fields = (config.fields || []) as unknown as TableField[];
     const editable = fields.filter((field) => field.editable !== false);
@@ -183,11 +223,11 @@ export class TableDataService {
   }
 
   /** 删除一条数据 */
-  async remove(systemId: string, tcid: string, id: string, user: JwtUser) {
+  async remove(systemId: string, tcid: string, id: string, user: JwtUser, routeId?: string) {
     this.assertUuid(id);
     const config = await this.configService.getByTcid(systemId, tcid);
     const operations = (config.operations || {}) as TableOperations;
-    this.assertOperation(user, operations, "delete");
+    this.assertOperation(user, operations, "delete", routeId);
 
     const table = physicalTableName(config.tcid);
     const rows = await this.prisma.$queryRaw<Array<{ id: string }>>(
@@ -205,13 +245,19 @@ export class TableDataService {
    *   1. 表格配置里这个操作是开启的
    *   2. 用户有配置里指定的权限码（默认 data:create / data:update / data:delete）
    */
-  private assertOperation(user: JwtUser, operations: TableOperations, action: "create" | "update" | "delete"): void {
+  private assertOperation(
+    user: JwtUser,
+    operations: TableOperations,
+    action: "create" | "update" | "delete",
+    routeId?: string,
+  ): void {
     const labels = { create: "新增", update: "修改", delete: "删除" };
     if (operations[action] === false) {
       throw new ForbiddenException(`该表格已关闭${labels[action]}操作`);
     }
     const permission = operations[`${action}Permission`];
-    if (permission && !hasPermission(user?.permissions, Boolean(user?.isSuper), permission)) {
+    // 按路由区分：认「当前路由的权限码」或老的基础码（所有路由通用）
+    if (!hasRouteScopedPermission(user?.permissions, Boolean(user?.isSuper), permission, routeId)) {
       throw new ForbiddenException(`没有${labels[action]}权限（需要 ${permission}）`);
     }
   }

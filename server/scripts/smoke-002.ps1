@@ -125,6 +125,7 @@ $groupTitles = @($tree.data.tree | ForEach-Object { $_.title })
 Assert-That ($groupTitles -contains "系统功能") "树里有「系统功能」分组"
 Assert-That ($groupTitles -contains "菜单与按钮") "树里有「菜单与按钮」分组"
 
+# 菜单节点：按角色菜单可勾，公开菜单禁用
 $menuGroup = $tree.data.tree | Where-Object { $_.title -eq "菜单与按钮" } | Select-Object -First 1
 $roleNode = $menuGroup.children | Where-Object { $_.code -eq "menu:$routeId" } | Select-Object -First 1
 Assert-That ($null -ne $roleNode) "按角色菜单出现在树里（menu:<routeId>）"
@@ -133,9 +134,10 @@ Assert-That ($roleNode.disabled -eq $false) "按角色菜单可勾选"
 $publicNode = $menuGroup.children | Where-Object { $_.title -eq "公开页面" } | Select-Object -First 1
 Assert-That ($publicNode.disabled -eq $true) "公开菜单不可勾选"
 
+# 按钮挂在菜单下面（前端 el-tree 父子不联动，取消按钮不会影响菜单）
 $buttonCodes = @($roleNode.children | ForEach-Object { $_.code })
 $buttonTitles = @($roleNode.children | ForEach-Object { $_.title })
-Assert-That ($buttonCodes -contains "data:create:$tcid") "菜单下列表按钮权限含 data:create:<tcid>"
+Assert-That (@($buttonCodes | Where-Object { $_ -like "data:create:$tcid*" }).Count -ge 1) "菜单下挂列表按钮权限含 data:create:<tcid>:route:<routeId>（按路由区分）"
 Assert-That ($buttonTitles -contains "新增（$($cfg.data.name)）") "按钮节点标题带表格名"
 Assert-That ($buttonCodes.Count -ge 3) "按钮节点包含新增/修改/删除（实际 $($buttonCodes.Count) 个）"
 

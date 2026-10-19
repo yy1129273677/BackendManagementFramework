@@ -698,7 +698,12 @@ defineExpose({
 .bmf-table :deep(.bmf-form-dialog .el-dialog__body) {
   /* flex: 1 表示「把除去标题和底部按钮之外的高度都占了」 */
   flex: 1;
-  overflow: auto;
+  /* 只纵向滚动，横向一律裁掉。
+     为什么不能直接用 overflow: auto：表单用的是 <el-row :gutter="12">，
+     Element Plus 会给 row 加左右各 -6px 的外边距（靠 col 的 padding 补回来），
+     于是 row 比容器宽 12px —— 内容明明放得下，也会多出一条没用的横向滚动条。 */
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .search-form {

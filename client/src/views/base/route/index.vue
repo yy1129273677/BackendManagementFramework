@@ -8,7 +8,7 @@
           ｜表格路由点菜单即可看到页面，自定义页面需要前端先写好 vue 文件
         </span>
       </div>
-      <el-button type="primary" @click="openCreate">新建路由</el-button>
+      <el-button v-if="auth.hasPermission('route:create')" type="primary" @click="openCreate">新建路由</el-button>
     </div>
 
     <el-table v-loading="loading" :data="list" border stripe>
@@ -61,8 +61,12 @@
       <el-table-column prop="sort" label="排序" width="70" />
       <el-table-column label="操作" width="140" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-          <el-button link type="danger" size="small" @click="remove(row)">删除</el-button>
+          <el-button v-if="auth.hasPermission('route:update')" link type="primary" size="small" @click="openEdit(row)">
+            编辑
+          </el-button>
+          <el-button v-if="auth.hasPermission('route:delete')" link type="danger" size="small" @click="remove(row)">
+            删除
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -125,16 +129,17 @@
               v-model="form.configText"
               type="textarea"
               :rows="6"
-              placeholder='{"title": "订单中心", "pageSize": 50}'
+              placeholder='{"title": "订单中心", "pageSize": 50, "tcids": ["TDEMOORDERS"]}'
               spellcheck="false"
             />
             <div class="config-actions">
               <span class="text-muted">
-                这个 JSON 会作为 props 注入前端页面：自定义页面写
-                <code>defineProps&lt;{ routeConfig?: any }&gt;()</code>
-                就能拿到，不用改代码就能调参数。
+                这个 JSON 会作为 props 注入前端页面（<code>defineProps&lt;{ routeConfig?: any }&gt;()</code>）。
+                自定义页面里如果写了 <code>&lt;Table :tcid="..." /&gt;</code>，在 <code>tcids</code> 里声明这些
+                TCID，勾了本菜单的角色就能读这几张表。
               </span>
               <el-space>
+                <el-button link type="primary" size="small" @click="insertTcidsTemplate">插入 tcids 模板</el-button>
                 <el-button link type="primary" size="small" @click="formatConfig">格式化</el-button>
                 <el-button link type="danger" size="small" @click="form.configText = ''">清空</el-button>
               </el-space>
@@ -197,11 +202,22 @@ const form = reactive({
 async function load(): Promise<void> {
   loading.value = true;
   try {
-    const [routes, configs] = await Promise.all([routeApi.list(), tableConfigApi.list()]);
+    // 路由列表只要 route:read 就能看（只读用户也能进这个页面）
+    const routes = await routeApi.list();
     list.value = routes.list || [];
-    tableConfigs.value = configs.list || [];
   } finally {
     loading.value = false;
+  }
+
+  // 「表格配置」只是新建/编辑时「绑定 TCID」下拉的数据，需要 table:read。
+  // 以前和路由列表一起 Promise.all，导致没有 table:read 的用户（比如只有 route:read 的
+  // 只读角色）整页 403、表格显示「暂无数据」。现在拆开：拿不到就空着，不影响看路由。
+  if (!auth.hasPermission("table:read")) return;
+  try {
+    const configs = await tableConfigApi.list();
+    tableConfigs.value = configs.list || [];
+  } catch {
+    tableConfigs.value = [];
   }
 }
 
@@ -255,6 +271,37 @@ function formatConfig(): void {
   } catch {
     ElMessage.error("JSON 格式不正确，无法格式化");
   }
+}
+
+/**
+ * 往 JSON 配置里插入/补齐 tcids 模板。
+ *
+ * 为什么需要：自定义页面里写了 `<Table :tcid="...">` 时，必须在这里声明 TCID，
+ * 勾了本菜单的角色才能读这几张表（否则打开页面表格会 403）。
+ * 已经配过 tcids 的话保留原值，只补上 key，避免手抖覆盖已有配置。
+ */
+function insertTcidsTemplate(): void {
+  let config: Record<string, any> = {};
+  const text = form.configText.trim();
+  if (text) {
+    try {
+      const parsed = JSON.parse(text);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        ElMessage.warning("当前 JSON 不是对象，先清空再插入模板");
+        return;
+      }
+      config = parsed;
+    } catch {
+      ElMessage.error("当前 JSON 格式不正确，先修好再插入模板");
+      return;
+    }
+  }
+
+  if (!Array.isArray(config.tcids)) {
+    config.tcids = [];
+  }
+  form.configText = JSON.stringify(config, null, 2);
+  ElMessage.success("已插入 tcids 模板，把 TCID 填进数组即可");
 }
 
 async function submit(): Promise<void> {

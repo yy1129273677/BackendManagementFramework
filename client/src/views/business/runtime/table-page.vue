@@ -8,7 +8,16 @@
       title="这条路由没有绑定 TCID"
       description="请到「路由管理」里把路由类型设为 TABLE 并选择一个表格配置（TCID）。"
     />
-    <Table v-else :tcid="tcid" />
+    <Table v-else :tcid="tcid">
+      <template #action-ship="{ row, reload }">
+        <el-button link type="success" size="small" @click="handleShip({ row, reload })">标记发货</el-button>
+      </template>
+
+      <!-- 接管配置里 value = 'detail' 的自定义按钮 -->
+      <template #action-detail="{ row }">
+        <el-button link type="primary" size="small" @click="handleDetail({ row })">查看详情</el-button>
+      </template>
+    </Table>
   </div>
 </template>
 
@@ -30,4 +39,12 @@ import Table from "@/components/table/index.vue";
 const route = useRoute();
 
 const tcid = computed(() => String(route.meta?.tcid || route.params?.tcid || ""));
+
+const handleShip = ({ row, reload }) => {
+  console.log(row);
+};
+
+const handleDetail = ({ row }) => {
+  console.log(row);
+};
 </script>

@@ -55,6 +55,8 @@ export class RoleService {
           tcid: true,
           sort: true,
           accessType: true,
+          // 自定义页面的内嵌表格声明在 config.tcids 里（权限树要读它生成说明）
+          config: true,
         },
       }),
       this.prisma.tableConfig.findMany({

@@ -3,11 +3,13 @@
  */
 
 /**
- * JWT 里承载的用户信息（登录时签进去，之后每个请求都解出来）。
+ * JWT 里承载的用户信息。
  *
- * 说明：
- *   权限是「登录那一刻」的快照，改了角色权限后需要重新登录才生效。
- *   这是有意的取舍：每个请求都查数据库会让性能变差，而权限变更不频繁。
+ * 注意（2026-10-19 起）：
+ *   token 里虽然仍带着 permissions 字段（兼容旧 token），但**后端不再信任它**。
+ *   `JwtStrategy.validate` 每次请求会按 user.sub 查库，用「最新的角色权限」覆盖
+ *   request.user.permissions（见 auth/jwt-user.ts）。
+ *   所以改完权限刷新页面就生效，不需要重新登录。
  */
 export interface JwtUser {
   /** 用户 id */
