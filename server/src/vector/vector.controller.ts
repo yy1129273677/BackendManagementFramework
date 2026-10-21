@@ -1,5 +1,5 @@
 import { Controller, Get } from "@nestjs/common";
-import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { PrismaService } from "../prisma/prisma.service";
 
 /**
@@ -21,6 +21,10 @@ export class VectorController {
   constructor(private readonly prisma: PrismaService) {}
 
   /** GET /api/vector/status —— 环境自检，部署后可以调一下确认 pgvector 装好了 */
+  @ApiOperation({
+    summary: "pgvector 环境自检",
+    description: "返回 vector 扩展是否安装及版本、预留的向量维度（1024）和待检索文档数量；需要登录，不做语义检索。",
+  })
   @Get("status")
   async status() {
     const extension = await this.prisma.$queryRaw<Array<{ extversion: string }>>`

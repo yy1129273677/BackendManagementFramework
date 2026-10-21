@@ -1,5 +1,5 @@
 import { Controller, Get } from "@nestjs/common";
-import { ApiTags } from "@nestjs/swagger";
+import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Public } from "../common/decorators";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -20,6 +20,10 @@ export class HealthController {
 
   /** GET /api/health */
   @Public()
+  @ApiOperation({
+    summary: "健康检查（公开接口，无需 token）",
+    description: "用于部署自检和容器编排探活；返回服务状态、当前时间、数据库与 pgvector 可用性，不返回任何敏感信息。",
+  })
   @Get()
   async health() {
     const db = await this.prisma.health();
