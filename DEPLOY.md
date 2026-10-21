@@ -74,14 +74,18 @@ git commit -m "改了什么"
 git push
 
 # ② 本机：一键发布（构建镜像 → 上传 → 服务器导入 → 重建容器 → 自检）
-.\deploy-images.ps1
+deploy.cmd
 ```
 
 只改了前端可以更快：
 
 ```powershell
-.\deploy-images.ps1 -Only web
+deploy.cmd -Only web
 ```
+
+> `deploy.cmd` 只是 `deploy-images.ps1` 的包装：内部用 `powershell -ExecutionPolicy Bypass` 启动。
+> 原因是本仓库在 E: 盘，PowerShell 会把该盘的文件当"远程"，`RemoteSigned` 下直接运行
+> `.\deploy-images.ps1` 会报"未对文件进行数字签名"。参数和原来完全一致。
 
 > 服务器上的 `update.sh` 现在默认**不在服务器上构建**（`docker compose up -d` 用已上传的镜像），
 > 只做一遍重建 + 自检。如果确实想在服务器上构建（网络好的环境），用 `bash update.sh --build`。

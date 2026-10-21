@@ -76,7 +76,11 @@ $sshOpts = @(
 # ---------- 1. 构建镜像 ----------
 if (-not $SkipBuild) {
     Write-Host "[1/4] 本机构建镜像（$($services -join ', ')）…" -ForegroundColor Cyan
-    & docker compose build @services
+    # 注意：这里必须写 $services，不能写 @services。
+    # switch 只命中一个分支时，$services 会被展开成单个字符串（如 "server"），
+    # 而 @services 这种 splatting 会把字符串当成字符集合，逐个字符传出去，
+    # docker 收到的是 s、e、r、v、e、r，于是报 "no such service: s"。
+    & docker compose build $services
     if ($LASTEXITCODE -ne 0) { throw "docker compose build 失败，已中止（服务器没有任何改动）" }
 } else {
     Write-Host "[1/4] 跳过构建，使用本地现有镜像" -ForegroundColor Yellow
@@ -89,7 +93,8 @@ $gz = Join-Path $PSScriptRoot "bmf-images.tar.gz"
 if (Test-Path $tar) { Remove-Item $tar -Force }
 if (Test-Path $gz) { Remove-Item $gz -Force }
 
-& docker save -o $tar @images
+# 同样不能写 @images：-Only server / web 时它是单个字符串，splatting 会拆成字符。
+& docker save -o $tar $images
 if ($LASTEXITCODE -ne 0) { throw "docker save 失败" }
 
 # 注意：这里打出来的是「tar 里套一个 tar」。
