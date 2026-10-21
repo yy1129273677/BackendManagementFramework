@@ -57,9 +57,14 @@ services:
       SUPER_ADMIN_USERNAME: ${SUPER_ADMIN_USERNAME:-yy1}
       SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-yy1129273677}
       TZ: Asia/Shanghai
-    # 不把 3000 端口暴露到公网：前端 Nginx 走容器内网转发 /api
-    expose:
-      - "3000"
+    # 前端 Nginx 走容器内网转发 /api（容器内部端口仍是 3000）。
+    # 这里额外把宿主机 3001 映射到容器 3000，专门用来在浏览器看 Swagger 接口文档：
+    #   http://服务器IP:3001/api/docs
+    # 不想对外显示时，去云控制台的安全组删掉 3001 的放行规则即可（Docker 发布端口会绕过 ufw，
+    # 本机防火墙拦不住，必须用安全组控制）。
+    # 注意：容器内的 PORT 仍必须是 3000——client/nginx.conf 里写死了 proxy_pass http://server:3000。
+    ports:
+      - "3001:3000"
 
   # ---------- 前端：Vite 构建 + Nginx 静态托管 + 反向代理 /api ----------
   web:
