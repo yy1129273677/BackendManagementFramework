@@ -2,7 +2,7 @@
 
 > 这份文档回答三个问题：**新增接口时必须守住哪些线、当前项目还缺什么、怎么自动抓住漏网之鱼。**
 >
-> 写代码前看第二节，交付前过第六节的三问。AGENTS.md §11 是这里的精简版。
+> 写代码前看第二节，交付前过第六节的三问。AGENTS.md 第 6 节是这里的精简版。
 
 ---
 
@@ -134,7 +134,7 @@
 
 ### 4.1 生成时（提示词 / 规范）
 
-- 本文档 + `AGENTS.md` §10（Swagger 规范）、§11（安全基线）。
+- 本文档 + `AGENTS.md` 第 5 节（Swagger 规范）、第 6 节（安全基线）。
 - 新增接口的交付说明里必须回答第六节的三问。
 
 ### 4.2 生成后（静态扫描）
@@ -153,7 +153,7 @@
 - `validation-pipe-should-use-forbid-unknown`：校验管道未禁止未知字段
 - `api-method-should-specify-api-response`：Swagger 响应未声明（和本文档 §10 呼应）
 
-> ⚠️ **前提**：本项目目前**没有 ESLint 链**（AGENTS.md §2、§8 明确规定"要加 lint 需要先讨论规则集"）。
+> ⚠️ **前提**：本项目目前**没有 ESLint 链**（AGENTS.md 第 1、4 节明确规定"要加 lint 需要先讨论规则集"）。
 > 引入 ESLint 会新增配置文件、依赖和格式化冲突风险，属于需要单独决策的改动，不要顺手加。
 
 **已落地的替代方案**：`server/src/common/controller-conventions.spec.ts`

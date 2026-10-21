@@ -10,8 +10,9 @@ import { CreateSystemDto, UpdateSystemDto } from "./system.dto";
  * 谁能用：只有超管（接口上标了 requirePermissions('system:manage')）。
  *
  * 设计说明：
- *   新建子系统时会自动送一个默认角色 ADMIN（带一套常用权限），
- *   这样超管建完系统就能直接建用户、配路由，不用先手工造角色。
+ *   新建子系统时会自动送一个默认角色 ADMIN（只带用户、角色两组权限），
+ *   这样超管建完系统就能直接建用户、配角色，不用先手工造角色。
+ *   路由/字典/表格配置/子系统管理属于主系统超管的配置能力，不下放给租户。
  */
 @Injectable()
 export class SystemService {
@@ -70,11 +71,9 @@ export class SystemService {
           systemId: system.id,
           code: "ADMIN",
           name: "默认管理员",
+          // 租户只负责自己的用户和角色；路由/字典/表格配置/子系统管理由主系统超管维护，
+          // 所以默认只给这两组权限（用户明确要求）。
           permissions: [
-            "route:read",
-            "route:create",
-            "route:update",
-            "route:delete",
             "user:read",
             "user:create",
             "user:update",
@@ -83,16 +82,6 @@ export class SystemService {
             "role:create",
             "role:update",
             "role:delete",
-            "dict:read",
-            "dict:manage",
-            "table:read",
-            "table:create",
-            "table:update",
-            "table:delete",
-            "data:read",
-            "data:create",
-            "data:update",
-            "data:delete",
           ],
           remark: "新建子系统时自动创建，可按需裁剪权限",
         },

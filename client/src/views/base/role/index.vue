@@ -123,7 +123,14 @@ const treeRef = ref<any>();
 const treeData = ref<any[]>([]);
 const treeLoading = ref(false);
 const keyMap = ref<Record<string, string>>({});
-const treeProps = { label: "title", children: "children", disabled: "disabled" };
+// 分组节点（系统功能 / 菜单与按钮 / 各个二级分组）只是用来归类，本身没有权限码，
+// 勾不勾都不影响保存结果。给它们单独加 class，样式里把复选框隐藏掉，纯展示。
+const treeProps = {
+  label: "title",
+  children: "children",
+  disabled: "disabled",
+  class: (data: any) => (data.type === "group" ? "perm-group-node" : ""),
+};
 
 const form = reactive({
   code: "",
@@ -299,6 +306,15 @@ onMounted(load);
   max-height: 420px;
   overflow: auto;
   padding: 6px 8px;
+}
+
+/* 分组节点（系统功能 / 菜单与按钮 / 二级分组）只做展示，不参与勾选 */
+.perm-tree :deep(.perm-group-node > .el-tree-node__content .el-checkbox) {
+  display: none;
+}
+
+.perm-tree :deep(.perm-group-node > .el-tree-node__content) {
+  font-weight: 600;
 }
 
 .tree-node {

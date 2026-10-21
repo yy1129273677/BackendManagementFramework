@@ -85,6 +85,26 @@ const OPERATION_LABELS: Record<"create" | "update" | "delete", string> = {
 };
 
 /**
+ * 子系统（租户）角色可用的系统功能分组。
+ *
+ * 路由、字典、表格配置、子系统管理都属于「主系统超管维护」的配置能力，
+ * 租户自己的角色只应管理「用户」和「角色」，否则租户管理员可以自己改配置甚至越权。
+ */
+export const TENANT_FUNCTION_GROUPS = ["用户", "角色"];
+
+/**
+ * 按系统类型过滤出可展示的系统功能权限。
+ *
+ * - 主系统：全部（「表格数据」组照旧剔除，读权限由菜单决定）
+ * - 子系统：只有「用户」「角色」两组
+ */
+export function availableFunctions(isMainSystem: boolean): typeof ALL_PERMISSIONS {
+  return ALL_PERMISSIONS.filter(
+    (item) => item.group !== "表格数据" && (isMainSystem || TENANT_FUNCTION_GROUPS.includes(item.group)),
+  );
+}
+
+/**
  * 构建整棵权限树。
  *
  * 返回两部分：
@@ -127,7 +147,7 @@ export function buildPermissionTree(input: {
   //      不需要再单独勾一个「读取所有表格数据」的全局开关（用户明确反对这种设计）；
   //   2. 增删改属于按钮权限，由各表菜单下面的按钮节点提供（新表是 data:<op>:<tcid>）。
   // 老角色上已经存在的全局码不会丢：角色页保存时会把树上没有的码原样保留（legacyCodes）。
-  const functions = (input.functions || ALL_PERMISSIONS).filter((item) => item.group !== "表格数据");
+  const functions = (input.functions || availableFunctions(true)).filter((item) => item.group !== "表格数据");
 
   // group 名称 → 该组下的权限项
   const functionGroups = new Map<string, typeof functions>();

@@ -1,4 +1,5 @@
 import {
+  availableFunctions,
   buildPermissionTree,
   menuPermissionCode,
   tableActionPermission,
@@ -210,6 +211,23 @@ describe("buildPermissionTree 权限树", () => {
 
     const routeGroup = functionsGroup.children!.find((node) => node.title === "路由")!;
     expect(routeGroup.children!.map((node) => node.code)).toContain("route:read");
+  });
+
+  it("主系统展示全部系统功能分组，子系统只有「用户」「角色」两组", () => {
+    const mainGroups = new Set(availableFunctions(true).map((item) => item.group));
+    expect(mainGroups).toEqual(new Set(["主系统", "路由", "用户", "角色", "字典", "表格配置"]));
+
+    const tenantGroups = [...new Set(availableFunctions(false).map((item) => item.group))];
+    expect(tenantGroups).toEqual(["用户", "角色"]);
+
+    // 租户树里连二级分组都不应出现路由/字典/表格配置/主系统
+    const { tree } = buildPermissionTree({
+      routes,
+      tableConfigs,
+      functions: availableFunctions(false),
+    });
+    const functionsGroup = tree.find((node) => node.title === "系统功能")!;
+    expect(functionsGroup.children!.map((node) => node.title)).toEqual(["用户", "角色"]);
   });
 
   it("表格配置不存在时给出提示节点，不抛错", () => {

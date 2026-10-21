@@ -38,7 +38,7 @@ sequenceDiagram
 
     S->>C: 在「子系统管理」新建 demo（code/name）
     C->>A: POST /api/systems
-    A->>D: 事务：INSERT sys_system + INSERT 默认 ADMIN 角色
+    A->>D: 事务：INSERT sys_system + INSERT 默认 ADMIN 角色（仅用户/角色权限）
     A-->>C: 新子系统
     S->>C: 顶栏选「demo」→ 前端写 localStorage.bmf_system_code='demo' → 整页刷新
     Note over C: 之后每个请求自动带 X-System-Code: demo

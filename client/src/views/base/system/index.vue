@@ -89,6 +89,7 @@
 import { onMounted, reactive, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { systemApi } from "@/api";
+import router, { setupDynamicRoutes } from "@/router";
 import { useAuthStore } from "@/stores/auth";
 
 const auth = useAuthStore();
@@ -186,7 +187,23 @@ async function remove(row: any): Promise<void> {
   }
 
   await systemApi.remove(row.id);
-  ElMessage.success("已删除");
+
+  // 删除的正是「当前正在配置」的子系统时，必须先把上下文切回主系统：
+  // 否则后续请求还会带 X-System-Code=<已删除的系统编码>，后端一律返回 404「子系统不存在」，
+  // 表现就是「删除成功了但列表不刷新、还弹一条看不懂的错误」。
+  const deletingActive = auth.activeSystemCode === row.code;
+  if (deletingActive) {
+    auth.setActiveSystem("");
+    // 左侧菜单是跟着当前子系统动态加载的，也要重新按主系统拉一次，
+    // 避免已删除子系统的菜单还留在页面上。
+    try {
+      await setupDynamicRoutes(router);
+    } catch {
+      // 菜单刷新失败不影响下面的列表刷新
+    }
+  }
+
+  ElMessage.success(deletingActive ? "已删除，已切回主系统" : "已删除");
   await load();
 }
 

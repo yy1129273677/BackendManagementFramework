@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { ALL_PERMISSIONS, SUPER_ROLE_CODE } from "../common/constants";
 import { PrismaService } from "../prisma/prisma.service";
-import { buildPermissionTree } from "./permission-tree";
+import { availableFunctions, buildPermissionTree } from "./permission-tree";
 import { CreateRoleDto, UpdateRoleDto } from "./role.dto";
 
 /**
@@ -39,11 +39,15 @@ export class RoleService {
    *   系统功能 —— 子系统/用户/角色/字典/表格配置等管理能力
    *   菜单与按钮 —— 当前子系统的真实路由；TABLE 路由下面挂这张表的按钮权限
    *
+   * 注意：子系统（租户）只展示「用户」「角色」两组系统功能。
+   * 路由/字典/表格配置/子系统管理都由主系统超管维护，租户角色里不应出现（用户明确要求）。
+   *
    * 返回 keyMap：el-tree 勾选的是节点 key，保存时要按 keyMap 映射回权限码
    * （同一个权限码可能出现在多个节点上，所以 key 必须唯一）。
    */
   async permissionTree(systemId: string) {
-    const [routes, tableConfigs] = await Promise.all([
+    const [system, routes, tableConfigs] = await Promise.all([
+      this.prisma.system.findUnique({ where: { id: systemId }, select: { isMain: true } }),
       this.prisma.route.findMany({
         where: { systemId },
         orderBy: [{ sort: "asc" }, { title: "asc" }],
@@ -68,7 +72,7 @@ export class RoleService {
     return buildPermissionTree({
       routes: routes as any,
       tableConfigs: tableConfigs as any,
-      functions: ALL_PERMISSIONS,
+      functions: availableFunctions(Boolean(system?.isMain)),
     });
   }
 

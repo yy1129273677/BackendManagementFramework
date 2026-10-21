@@ -30,7 +30,7 @@ export class SystemController {
   @ApiOperation({
     summary: "新建子系统",
     description:
-      "系统编码创建后不可修改，且不能使用保留编码 main。创建成功后会同时生成一个默认管理员角色 ADMIN（带一套常用权限）。",
+      "系统编码创建后不可修改，且不能使用保留编码 main。创建成功后会同时生成一个默认管理员角色 ADMIN，只带「用户」「角色」两组权限（路由/字典/表格配置由主系统超管维护）。",
   })
   @Post()
   create(@Body() dto: CreateSystemDto) {
