@@ -128,6 +128,8 @@
           :label="column.label"
           :width="column.width"
           :min-width="column.width ? undefined : 120"
+          :align="column.align || 'left'"
+          :header-align="column.align || 'left'"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -143,18 +145,38 @@
           </template>
         </el-table-column>
 
+        <!-- 创建人：系统固定列，只在读/写范围生效为 ALL 时展示（后端已按当前用户折算） -->
+        <el-table-column v-if="config?.showCreator" label="创建人" width="120" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.creatorName || "—" }}</template>
+        </el-table-column>
+
         <!-- 操作列 -->
         <el-table-column
-          v-if="operations.update || operations.delete || customActions.length > 0"
+          v-if="operations.look || operations.update || operations.delete || customActions.length > 0"
           label="操作"
           :width="operationColumnWidth"
           fixed="right"
         >
           <template #default="{ row }">
-            <el-button v-if="operations.update" link type="primary" size="small" @click="openEdit(row)">
+            <el-button v-if="operations.look" link type="primary" size="small" @click="openDetail(row)">
+              详情
+            </el-button>
+            <el-button
+              v-if="operations.update && canWriteRow(row)"
+              link
+              type="primary"
+              size="small"
+              @click="openEdit(row)"
+            >
               编辑
             </el-button>
-            <el-button v-if="operations.delete" link type="danger" size="small" @click="handleDelete(row)">
+            <el-button
+              v-if="operations.delete && canWriteRow(row)"
+              link
+              type="danger"
+              size="small"
+              @click="handleDelete(row)"
+            >
               删除
             </el-button>
 
@@ -277,6 +299,34 @@
         <el-button type="primary" :loading="submitting" @click="submitForm">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 查看详情：弹框宽高沿用编辑弹框的界面配置，内容用「表格样式」只读展示。
+         字段的先后顺序、占宽（24 栅格）和必填红星都来自表单配置（formSort / formSpan / required）。 -->
+    <el-dialog
+      v-model="detailVisible"
+      :title="`详情 - ${config?.name || ''}`"
+      class="bmf-form-dialog bmf-detail-dialog"
+      :width="dialogWidth"
+      :style="dialogStyle"
+      destroy-on-close
+    >
+      <el-empty v-if="detailFields.length === 0" description="没有可展示的字段" :image-size="80" />
+      <div v-else class="detail-grid">
+        <div
+          v-for="field in detailFields"
+          :key="field.name"
+          class="detail-cell"
+          :style="{ gridColumn: `span ${field.formSpan || 24}` }"
+        >
+          <div class="detail-label"><span v-if="field.required" class="detail-required">*</span>{{ field.label }}</div>
+          <div class="detail-value">{{ detailValue(field) }}</div>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="detailVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -305,6 +355,7 @@
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { dictApi, tableDataApi } from "@/api";
+import { useAuthStore } from "@/stores/auth";
 import type { CustomAction, TableConfig, TableField, TableRow } from "./types";
 // resolveTableUiConfig 是个函数（不是类型），所以单独 import
 import { resolveTableUiConfig } from "./types";
@@ -345,6 +396,7 @@ const emit = defineEmits<{
 }>();
 
 // ---------------- 状态 ----------------
+const auth = useAuthStore();
 const configLoading = ref(false);
 const loading = ref(false);
 const config = ref<TableConfig | null>(null);
@@ -362,6 +414,9 @@ const editingId = ref("");
 const submitting = ref(false);
 const formModel = reactive<Record<string, any>>({});
 
+const detailVisible = ref(false);
+const detailRow = ref<TableRow | null>(null);
+
 // ---------------- 派生数据 ----------------
 /** 列表列：按 listSort 排（老字段 sort 兜底） */
 const columns = computed(() =>
@@ -377,8 +432,35 @@ const formFields = computed(() =>
     .filter((field) => field.editable !== false && field.formVisible !== false)
     .sort((a, b) => (a.formSort ?? a.listSort ?? 0) - (b.formSort ?? b.listSort ?? 0)),
 );
-const operations = computed(() => config.value?.operations || { create: false, update: false, delete: false });
+
+/**
+ * 详情字段：表单里配置为显示的字段，按 formSort 排。
+ * 不要求 editable（只读字段也应该能在详情里看到），但顺序和占宽与表单一致。
+ */
+const detailFields = computed(() =>
+  [...(config.value?.fields || [])]
+    .filter((field) => field.formVisible !== false)
+    .sort((a, b) => (a.formSort ?? a.listSort ?? 0) - (b.formSort ?? b.listSort ?? 0)),
+);
+
+const operations = computed(
+  () => config.value?.operations || { look: false, create: false, update: false, delete: false },
+);
 const customActions = computed(() => config.value?.customActions || []);
+
+/**
+ * 这一行能不能改/删（只影响按钮显示，后端还会再校验一次）。
+ *
+ * 生效后的 writeScope 已经由后端折算过：超管 / 写范围为 ALL 时是 "ALL"，
+ * 只有真正限制「仅本人」时才会走到 created_by 比对。
+ * 历史数据没有 created_by（null），非超管用户看不到也改不了。
+ */
+function canWriteRow(row: TableRow): boolean {
+  if (config.value?.writeScope !== "OWN") return true;
+  const currentUserId = auth.user?.id;
+  if (!currentUserId) return false;
+  return row.created_by === currentUserId;
+}
 
 /**
  * 界面配置（表格高度、表单弹框长宽）。
@@ -414,6 +496,7 @@ const dialogStyle = computed(() => ({
 /** 操作列宽度：按实际会显示几个按钮动态算，避免按钮换行 */
 const operationColumnWidth = computed(() => {
   let width = 24;
+  if (operations.value.look) width += 48;
   if (operations.value.update) width += 56;
   if (operations.value.delete) width += 56;
   width += customActions.value.length * 76;
@@ -585,6 +668,45 @@ function openEdit(row: TableRow): void {
   dialogVisible.value = true;
 }
 
+// ---------------- 查看详情 ----------------
+/**
+ * 打开详情弹框。
+ *
+ * 数据直接用当前行（列表接口已经按字段白名单返回），只读展示，
+ * 所以不需要再请求一次详情接口，也不存在「打开后数据又被别人改了」的问题。
+ */
+function openDetail(row: TableRow): void {
+  detailRow.value = row;
+  detailVisible.value = true;
+}
+
+/**
+ * 详情里某个字段显示的文字。
+ *
+ * 和列表单元格走同一套规则（字典 label 优先、日期截断、布尔转是/否），
+ * 保证「列表里看到的」和「详情里看到的」一致；
+ * JSON 字段额外做一次格式化，否则一行挤在一起没法看。
+ */
+function detailValue(field: TableField): string {
+  const row = detailRow.value;
+  if (!row) return "—";
+
+  const raw = row[field.name];
+  if (raw === null || raw === undefined || raw === "") return "—";
+
+  if (field.type === "json") {
+    try {
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      // 库里存了不合法 JSON 时按原文显示，至少不吞数据
+      return String(raw);
+    }
+  }
+
+  return cellText(row, field);
+}
+
 async function submitForm(): Promise<void> {
   // 表单校验（需求 002 第 5 条）：
   //   1. 必填   2. 正则   3. 自定义校验器（能拿到整个表单，做联动）
@@ -744,5 +866,56 @@ defineExpose({
 
 .range-sep {
   color: @text-secondary;
+}
+
+/* ---------------- 查看详情 ---------------- */
+/* 24 栅格和表单保持一致：字段配的「所占列」（formSpan）直接映射成网格跨度。
+   容器只画左边和上边的框线，每个单元格画右边和下边，拼起来就是一张完整的表格；
+   这样跨列的字段也能自然占满，不会因为 gap 断线。 */
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  border-top: 1px solid @border-light;
+  border-left: 1px solid @border-light;
+  border-radius: @radius-sm;
+  overflow: hidden;
+}
+
+/* 一个字段 = 表格里的一格：左边是标签（浅底、右对齐），右边是值 */
+.detail-cell {
+  display: flex;
+  min-width: 0;
+  border-right: 1px solid @border-light;
+  border-bottom: 1px solid @border-light;
+}
+
+.detail-label {
+  flex: 0 0 120px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 10px 12px;
+  background: @bg-page;
+  color: @text-regular;
+  font-weight: 500;
+  /* 标签很长时允许折行，不再撑宽整列 */
+  overflow-wrap: anywhere;
+}
+
+.detail-required {
+  color: @danger;
+  line-height: 1.4;
+}
+
+.detail-value {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  color: @text-main;
+  /* 多行文本 / JSON 保留换行；长串（URL、JSON）强制在任意位置断行，避免撑出横向滚动条 */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 </style>

@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { hasPermission } from "../common/permissions";
 import { hasRouteScopedPermission } from "../common/permission-scope";
+import { normalizeDataScope, resolveDataScope } from "../common/data-scope";
 import { JwtUser } from "../common/types";
 import { PrismaService } from "../prisma/prisma.service";
 import { DdlService } from "./ddl.service";
@@ -139,6 +140,9 @@ export class TableConfigService {
           operations: operations as any,
           customActions: customActions as any,
           pageSize: this.normalizePageSize(dto.pageSize),
+          // 数据范围：默认 ALL（老表行为不变）；OWN = 仅本人可见 / 仅本人可改
+          readScope: this.normalizeOrThrow(() => normalizeDataScope(dto.readScope)),
+          writeScope: this.normalizeOrThrow(() => normalizeDataScope(dto.writeScope)),
           // 界面配置：没配过时存 NULL，前端再用内置默认值兜底（这样以后加新配置项不用迁移老数据）
           config: uiConfig as any,
           createdBy: user?.sub || null,
@@ -203,6 +207,18 @@ export class TableConfigService {
           ? (this.normalizeOrThrow(() => normalizeCustomActions(dto.customActions)) as any)
           : undefined,
         pageSize: dto.pageSize ? this.normalizePageSize(dto.pageSize) : undefined,
+        readScope:
+          dto.readScope === undefined
+            ? undefined
+            : this.normalizeOrThrow(() =>
+                normalizeDataScope(dto.readScope, config.readScope === "OWN" ? "OWN" : "ALL"),
+              ),
+        writeScope:
+          dto.writeScope === undefined
+            ? undefined
+            : this.normalizeOrThrow(() =>
+                normalizeDataScope(dto.writeScope, config.writeScope === "OWN" ? "OWN" : "ALL"),
+              ),
         // 界面配置：不传 = 不改动；传空值 = 清空（回到内置默认）
         config:
           dto.config === undefined
@@ -231,7 +247,7 @@ export class TableConfigService {
    * 给前端 <Table> 组件返回渲染配置。
    *
    * 返回里多了一层「当前用户能不能做」：
-   *   operations.create / update / delete 是布尔值，
+   *   operations.look / create / update / delete 是布尔值，
    *   已经把「表格是否开启该操作」和「用户是否有权限码」两个条件合并好了，
    *   前端不需要自己算，直接 v-if="config.operations.create" 就行。
    */
@@ -246,9 +262,21 @@ export class TableConfigService {
     const allowed = (permission?: string) =>
       hasRouteScopedPermission(user?.permissions, Boolean(user?.isSuper), permission, routeId);
 
+    const canLook = operations.look !== false && allowed(operations.lookPermission || `data:look:${config.tcid}`);
     const canCreate = operations.create !== false && allowed(operations.createPermission);
     const canUpdate = operations.update !== false && allowed(operations.updatePermission);
     const canDelete = operations.delete !== false && allowed(operations.deletePermission);
+
+    // 行级数据范围：返回「生效后」的值（超管 / data:viewAll 已折算成 ALL），
+    // 前端据此决定要不要按 created_by 隐藏别人行的改/删按钮。
+    const dataScope = resolveDataScope({
+      readScope: config.readScope,
+      writeScope: config.writeScope,
+      tcid: config.tcid,
+      isSuper: Boolean(user?.isSuper),
+      permissions: user?.permissions,
+      routeId,
+    });
 
     return {
       tcid: config.tcid,
@@ -256,6 +284,10 @@ export class TableConfigService {
       remark: config.remark,
       physicalTable: config.physicalTable,
       pageSize: config.pageSize,
+      readScope: dataScope.readAll ? "ALL" : "OWN",
+      writeScope: dataScope.writeAll ? "ALL" : "OWN",
+      // 创建人列只在能看到别人数据时展示；读写都是「仅本人」时没有信息量
+      showCreator: dataScope.readAll || dataScope.writeAll,
       searchMode: config.searchMode,
       conditions: config.conditions || null,
       // 所有字段（含隐藏的），前端表单需要它来决定编辑时显示哪些输入框
@@ -271,9 +303,11 @@ export class TableConfigService {
       // 搜索项：只有 searchable 的字段才会出现在搜索栏
       searchFields: fields.filter((field) => field.searchable === true),
       operations: {
+        look: canLook,
         create: canCreate,
         update: canUpdate,
         delete: canDelete,
+        lookPermission: operations.lookPermission || `data:look:${config.tcid}`,
         createPermission: operations.createPermission,
         updatePermission: operations.updatePermission,
         deletePermission: operations.deletePermission,

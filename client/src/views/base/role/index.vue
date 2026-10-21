@@ -4,10 +4,10 @@
       <div>
         <h3 style="margin: 0">角色管理</h3>
         <span class="text-muted">
-          当前系统：{{ auth.activeSystemCode || auth.user?.systemName }} ｜ 权限改成树形勾选：菜单 + 该菜单下表格的按钮
+          当前系统：{{ auth.activeSystemCode || auth.user?.systemName }} ｜ 权限树：系统功能 + 菜单与按钮
         </span>
       </div>
-      <el-button type="primary" @click="openCreate">新建角色</el-button>
+      <el-button v-if="auth.hasPermission('role:create')" type="primary" @click="openCreate">新建角色</el-button>
     </div>
 
     <el-table v-loading="loading" :data="list" border stripe>
@@ -22,10 +22,19 @@
         <template #default="{ row }">{{ row._count?.users ?? 0 }}</template>
       </el-table-column>
       <el-table-column prop="remark" label="备注" min-width="200" show-overflow-tooltip />
-      <el-table-column label="操作" width="140" fixed="right">
+      <el-table-column
+        v-if="auth.hasPermission('role:update') || auth.hasPermission('role:delete')"
+        label="操作"
+        width="140"
+        fixed="right"
+      >
         <template #default="{ row }">
-          <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-          <el-button link type="danger" size="small" @click="remove(row)">删除</el-button>
+          <el-button v-if="auth.hasPermission('role:update')" link type="primary" size="small" @click="openEdit(row)">
+            编辑
+          </el-button>
+          <el-button v-if="auth.hasPermission('role:delete')" link type="danger" size="small" @click="remove(row)">
+            删除
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -46,8 +55,8 @@
           <div class="tree-box">
             <div class="tree-toolbar">
               <span class="text-muted">
-                勾选即可授权：菜单 = 能看到这个菜单（TABLE 菜单同时可读该表数据），菜单下的按钮 =
-                在<b>这个路由下</b>能操作那张表。
+                勾选即可授权：系统功能里的分组（如「用户」「角色」）= 能进入并查看，增删改在下面单独勾选； 菜单 =
+                能看到这个菜单（TABLE 菜单同时可读该表数据），菜单下的按钮 = 在<b>这个路由下</b>能操作那张表。
                 按钮权限按路由区分：同一张表挂在两条路由下时是两个独立权限，取消一个不影响另一个。父子不联动，按钮也不影响菜单。
               </span>
               <el-space>

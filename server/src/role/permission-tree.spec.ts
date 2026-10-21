@@ -5,6 +5,7 @@ import {
   tableActionPermission,
   tableOperationPermission,
 } from "./permission-tree";
+import { viewAllPermissionCode } from "../common/data-scope";
 
 /**
  * 权限树构建的单测。
@@ -55,6 +56,8 @@ describe("buildPermissionTree 权限树", () => {
     {
       tcid: "TORDER0001",
       name: "订单列表",
+      // 读范围「仅本人」：权限树要额外给一个「查看全部数据」的逃生口
+      readScope: "OWN",
       operations: {
         create: true,
         update: true,
@@ -65,7 +68,7 @@ describe("buildPermissionTree 权限树", () => {
       },
       customActions: [
         { label: "标记发货", value: "ship", permission: "data:action:TORDER0001:ship" },
-        { label: "查看详情", value: "detail" },
+        { label: "查看明细", value: "detail" },
       ],
     },
     {
@@ -127,18 +130,46 @@ describe("buildPermissionTree 权限树", () => {
     const order = findNode(tree, "订单管理");
     const titles = order.children.map((node: any) => node.title);
 
+    expect(titles).toContain("查看详情（订单列表）");
     expect(titles).toContain("新增（订单列表）");
     expect(titles).toContain("修改（订单列表）");
     expect(titles).not.toContain("删除（订单列表）"); // delete 被关闭
   });
 
-  it("按钮权限码：配置优先，没配就用按 TCID 生成的默认码", () => {
+  it("按钮权限码：配置优先，没配就用按 TCID 生成的默认码（含查看详情 data:look）", () => {
     const { tree } = build();
     const order = findNode(tree, "订单管理");
     const codes = order.children.map((node: any) => node.code);
 
+    expect(codes).toContain(scoped("data:look:TORDER0001", "r-order"));
     expect(codes).toContain(scoped("data:create:TORDER0001", "r-order")); // 配置里写死的
     expect(codes).toContain(scoped(tableOperationPermission("TORDER0001", "update"), "r-order")); // 没配 → 默认码
+  });
+
+  it("读范围为「仅本人」的表格才生成「查看全部数据」节点，权限码按路由区分", () => {
+    const { tree, keyMap } = build();
+
+    const order = findNode(tree, "订单管理");
+    const orderViewAll = order.children.find((node: any) => node.title.startsWith("查看全部数据"));
+    expect(orderViewAll).toBeTruthy();
+    expect(orderViewAll.code).toBe(scoped(viewAllPermissionCode("TORDER0001"), "r-order"));
+    expect(keyMap[orderViewAll.key]).toBe(orderViewAll.code);
+
+    // 自定义页面示例也内嵌了这张表 → 各自一份，路由级权限码不同
+    const page = findNode(tree, "自定义页面示例");
+    const pageViewAll = page.children.find((node: any) => node.title.startsWith("查看全部数据"));
+    expect(pageViewAll).toBeTruthy();
+    expect(pageViewAll.code).toBe(scoped(viewAllPermissionCode("TORDER0001"), "r-page"));
+    expect(pageViewAll.code).not.toBe(orderViewAll.code);
+  });
+
+  it("读范围为 ALL / 未配置的表格不生成「查看全部数据」节点", () => {
+    const { tree } = buildPermissionTree({
+      routes: [{ id: "r-goods", title: "商品管理", type: "TABLE" as const, tcid: "TGOODS0001" }],
+      tableConfigs: [{ tcid: "TGOODS0001", name: "商品列表", readScope: "ALL", operations: {} }],
+    });
+    const goods = findNode(tree, "商品管理");
+    expect(goods.children.map((node: any) => node.title)).not.toContain("查看全部数据（商品列表）");
   });
 
   it("自定义按钮：配了权限码的可勾选；没配的禁用并说明", () => {
@@ -149,7 +180,7 @@ describe("buildPermissionTree 权限树", () => {
     expect(ship.disabled).toBeFalsy();
     expect(ship.code).toBe(scoped(tableActionPermission("TORDER0001", "ship"), "r-order"));
 
-    const detail = order.children.find((node: any) => node.title.startsWith("查看详情"));
+    const detail = order.children.find((node: any) => node.title.startsWith("查看明细"));
     expect(detail.disabled).toBe(true);
     expect(detail.note).toContain("未配置权限码");
   });
@@ -209,8 +240,29 @@ describe("buildPermissionTree 权限树", () => {
     expect(groupTitles).toContain("表格配置");
     expect(groupTitles).not.toContain("表格数据");
 
+    // 分组里的「查看」权限嫁接到分组节点上：勾选「路由」本身就是 route:read
     const routeGroup = functionsGroup.children!.find((node) => node.title === "路由")!;
-    expect(routeGroup.children!.map((node) => node.code)).toContain("route:read");
+    expect(routeGroup.type).toBe("function");
+    expect(routeGroup.code).toBe("route:read");
+    const routeChildCodes = routeGroup.children!.map((node) => node.code);
+    expect(routeChildCodes).toContain("route:create");
+    expect(routeChildCodes).not.toContain("route:read");
+  });
+
+  it("用户/角色分组的复选框就是查看权限，新增/修改/删除挂在下面单独授权", () => {
+    const { tree, keyMap } = build();
+    const functionsGroup = tree.find((node) => node.title === "系统功能")!;
+
+    const userGroup = functionsGroup.children!.find((node) => node.title === "用户")!;
+    expect(userGroup.type).toBe("function");
+    expect(userGroup.disabled).toBeFalsy();
+    expect(userGroup.code).toBe("user:read");
+    expect(keyMap[userGroup.key]).toBe("user:read");
+    expect(userGroup.children!.map((node) => node.code)).toEqual(["user:create", "user:update", "user:delete"]);
+
+    const roleGroup = functionsGroup.children!.find((node) => node.title === "角色")!;
+    expect(roleGroup.code).toBe("role:read");
+    expect(roleGroup.children!.map((node) => node.code)).toEqual(["role:create", "role:update", "role:delete"]);
   });
 
   it("主系统展示全部系统功能分组，子系统只有「用户」「角色」两组", () => {

@@ -26,6 +26,9 @@ export type SearchOp =
   | "isNull"
   | "notNull";
 
+/** 列表列的对齐方式：表头和单元格共用同一个值 */
+export type FieldAlign = "left" | "center" | "right";
+
 /** 字段定义（存进 sys_table_config.fields 的 JSON） */
 export interface TableField {
   /** 数据库列名，同时是接口字段名：小写字母开头，只含小写字母/数字/下划线 */
@@ -46,6 +49,8 @@ export interface TableField {
   required?: boolean;
   /** 列宽（px），不填自动 */
   width?: number;
+  /** 列表列的对齐方式（表头 + 单元格）；不填按左对齐 */
+  align?: FieldAlign;
   /** 自定义单元格插槽名：前端用 #col-<name> 或配置里指定的名字接管渲染 */
   slot?: string;
   /** 选项来源：字典编码或静态选项，用于下拉框 */
@@ -104,10 +109,13 @@ export interface CustomAction {
 
 /** 操作列的权限与开关 */
 export interface TableOperations {
+  /** 查看详情（弹框展示只读详情） */
+  look?: boolean;
   create?: boolean;
   update?: boolean;
   delete?: boolean;
-  /** 三个操作各自需要的权限码，默认 data:create / data:update / data:delete */
+  /** 各操作需要的权限码，默认 data:look / data:create / data:update / data:delete（按 TCID 生成时带表号） */
+  lookPermission?: string;
   createPermission?: string;
   updatePermission?: string;
   deletePermission?: string;
@@ -127,6 +135,9 @@ const SQL_TYPE_MAP: Record<FieldType, string> = {
 
 /** 所有合法类型，用于校验 */
 const ALL_FIELD_TYPES = Object.keys(SQL_TYPE_MAP) as FieldType[];
+
+/** 所有合法对齐方式 */
+const ALL_FIELD_ALIGNS: FieldAlign[] = ["left", "center", "right"];
 
 /** 所有合法搜索方式 */
 export const ALL_SEARCH_OPS: SearchOp[] = [
@@ -199,6 +210,11 @@ export function isFieldType(value: string): value is FieldType {
 /** 判断字符串是不是支持的搜索方式 */
 export function isSearchOp(value: string): value is SearchOp {
   return ALL_SEARCH_OPS.includes(value as SearchOp);
+}
+
+/** 判断字符串是不是支持的对齐方式 */
+export function isFieldAlign(value: string): value is FieldAlign {
+  return ALL_FIELD_ALIGNS.includes(value as FieldAlign);
 }
 
 /** 自定义校验器名字的合法格式 */
@@ -292,6 +308,8 @@ export function normalizeFields(input: unknown): TableField[] {
 
     const searchOp =
       raw.searchOp && isSearchOp(String(raw.searchOp)) ? (raw.searchOp as SearchOp) : defaultSearchOp(type);
+    // 对齐方式只认 left/center/right，非法值当作没配（前端按左对齐兜底）
+    const align = raw.align && isFieldAlign(String(raw.align)) ? (raw.align as FieldAlign) : undefined;
     const label = String(raw.label || name).trim() || name;
 
     const listSort = Number.isFinite(Number(raw.listSort))
@@ -310,6 +328,7 @@ export function normalizeFields(input: unknown): TableField[] {
       editable: raw.editable === undefined ? true : Boolean(raw.editable),
       required: Boolean(raw.required),
       width: raw.width ? Number(raw.width) : undefined,
+      align,
       slot: raw.slot ? String(raw.slot) : undefined,
       options: raw.options && typeof raw.options === "object" ? raw.options : undefined,
       sort: Number.isFinite(Number(raw.sort)) ? Number(raw.sort) : index,
@@ -359,14 +378,16 @@ export function normalizeCustomActions(input: unknown): CustomAction[] {
 }
 
 /**
- * 默认操作列配置：新增/修改/删除全开，权限码用全局 data:*。
+ * 默认操作列配置：查看详情/新增/修改/删除全开，权限码用全局 data:*。
  * （新建表格配置时用的是下面按 TCID 生成的版本，这个留着给老数据和测试用）
  */
 export function defaultOperations(): TableOperations {
   return {
+    look: true,
     create: true,
     update: true,
     delete: true,
+    lookPermission: "data:look",
     createPermission: "data:create",
     updatePermission: "data:update",
     deletePermission: "data:delete",
@@ -385,9 +406,11 @@ export function defaultOperations(): TableOperations {
  */
 export function defaultOperationsForTcid(tcid: string): TableOperations {
   return {
+    look: true,
     create: true,
     update: true,
     delete: true,
+    lookPermission: `data:look:${tcid}`,
     createPermission: `data:create:${tcid}`,
     updatePermission: `data:update:${tcid}`,
     deletePermission: `data:delete:${tcid}`,
@@ -400,9 +423,11 @@ export function normalizeOperations(input: unknown): TableOperations {
   if (!input || typeof input !== "object") return base;
   const raw = input as any;
   return {
+    look: raw.look === undefined ? base.look : Boolean(raw.look),
     create: raw.create === undefined ? base.create : Boolean(raw.create),
     update: raw.update === undefined ? base.update : Boolean(raw.update),
     delete: raw.delete === undefined ? base.delete : Boolean(raw.delete),
+    lookPermission: raw.lookPermission ? String(raw.lookPermission) : base.lookPermission,
     createPermission: raw.createPermission ? String(raw.createPermission) : base.createPermission,
     updatePermission: raw.updatePermission ? String(raw.updatePermission) : base.updatePermission,
     deletePermission: raw.deletePermission ? String(raw.deletePermission) : base.deletePermission,

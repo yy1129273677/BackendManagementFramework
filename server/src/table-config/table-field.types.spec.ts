@@ -91,14 +91,18 @@ describe("table-field 字段配置规范化", () => {
 
   it("操作列配置有默认值且可覆盖", () => {
     expect(defaultOperations()).toMatchObject({
+      look: true,
       create: true,
       update: true,
       delete: true,
+      lookPermission: "data:look",
     });
     const merged = normalizeOperations({
+      look: false,
       create: false,
       deletePermission: "x:y",
     });
+    expect(merged.look).toBe(false);
     expect(merged.create).toBe(false);
     expect(merged.update).toBe(true);
     expect(merged.deletePermission).toBe("x:y");
@@ -107,6 +111,7 @@ describe("table-field 字段配置规范化", () => {
   it("按 TCID 生成默认按钮权限码（不同表互不影响）", () => {
     const a = defaultOperationsForTcid("TA");
     const b = defaultOperationsForTcid("TB");
+    expect(a.lookPermission).toBe("data:look:TA");
     expect(a.createPermission).toBe("data:create:TA");
     expect(b.createPermission).toBe("data:create:TB");
     expect(a.updatePermission).not.toBe(b.updatePermission);
@@ -129,6 +134,19 @@ describe("table-field 字段配置规范化", () => {
       expect(field.searchSort).toBe(0);
       expect(field.formVisible).toBe(true);
       expect(field.formSpan).toBe(24);
+    });
+
+    it("列表对齐方式只接受 left/center/right，非法值当作未配置", () => {
+      const fields = normalizeFields([
+        { name: "a", type: "string", align: "center" },
+        { name: "b", type: "string", align: "right" },
+        { name: "c", type: "string", align: "middle" },
+        { name: "d", type: "string" },
+      ]);
+      expect(fields[0].align).toBe("center");
+      expect(fields[1].align).toBe("right");
+      expect(fields[2].align).toBeUndefined();
+      expect(fields[3].align).toBeUndefined();
     });
 
     it("表单宽度被限制在 1~24", () => {

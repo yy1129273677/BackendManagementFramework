@@ -26,7 +26,7 @@ export class DdlService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** 建表：id / created_at / updated_at 是固定列，其余来自配置 */
+  /** 建表：id / created_at / updated_at / created_by 是固定列，其余来自配置 */
   async createTable(tcid: string, fields: TableField[]): Promise<void> {
     const table = physicalTableName(tcid);
     const columns = fields.map((field) => this.columnDefinition(field)).join(",\n    ");
@@ -35,10 +35,15 @@ export class DdlService {
             CREATE TABLE IF NOT EXISTS "${table}" (
                 "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
                 "created_at" timestamptz NOT NULL DEFAULT now(),
-                "updated_at" timestamptz NOT NULL DEFAULT now()${columns ? ",\n    " + columns : ""}
+                "updated_at" timestamptz NOT NULL DEFAULT now(),
+                "created_by" uuid${columns ? ",\n    " + columns : ""}
             )
         `;
     await this.prisma.$executeRawUnsafe(sql);
+    // 行级隔离按 created_by 过滤，建索引避免大表全扫（存量表由 migrate:003 补）
+    await this.prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "idx_${table}_created_by" ON "${table}" ("created_by")`,
+    );
     this.logger.log(`已创建物理表 ${table}（${fields.length} 个业务字段）`);
   }
 

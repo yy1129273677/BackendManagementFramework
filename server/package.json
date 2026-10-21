@@ -16,6 +16,8 @@
     "seed": "ts-node -T prisma/seed.ts",
     "migrate:002": "ts-node -T prisma/migrate-002-permissions.ts",
     "migrate:002:dry": "ts-node -T prisma/migrate-002-permissions.ts --dry-run",
+    "migrate:003": "ts-node -T prisma/migrate-003-created-by.ts",
+    "migrate:003:dry": "ts-node -T prisma/migrate-003-created-by.ts --dry-run",
     "pretest": "prisma generate",
     "test": "jest --runInBand"
   },

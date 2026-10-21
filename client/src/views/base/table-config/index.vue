@@ -94,6 +94,34 @@
           <el-input v-model="form.remark" placeholder="这张表是干什么的" />
         </el-form-item>
 
+        <!-- 数据范围：行级隔离（读、写分开控制） -->
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="读数据范围">
+              <el-select v-model="form.readScope" style="width: 100%">
+                <el-option label="全部数据（系统内所有人可见）" value="ALL" />
+                <el-option label="仅本人创建的数据" value="OWN" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="写数据范围">
+              <el-select v-model="form.writeScope" style="width: 100%">
+                <el-option label="可修改所有人的数据" value="ALL" />
+                <el-option label="只能修改自己创建的数据" value="OWN" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-alert
+          v-if="form.readScope === 'OWN' || form.writeScope === 'OWN'"
+          type="warning"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 12px"
+          title="历史数据没有创建人：切换为「仅本人」后，只有超管（以及拥有「查看全部数据」权限的用户）能看到这些行；老角色需要重新授权后才生效。"
+        />
+
         <!-- 界面配置：一段 JSON，配表格高度和新增/编辑弹框的长宽 -->
         <el-form-item label="界面配置">
           <div style="width: 100%">
@@ -180,6 +208,19 @@
                   <el-input-number v-model="row.width" size="small" :min="60" :controls="false" style="width: 100%" />
                 </template>
               </el-table-column>
+              <!-- 列表列的对齐方式：同时作用于表头和单元格 -->
+              <el-table-column label="对齐方式" width="88">
+                <template #default="{ row }">
+                  <el-select v-model="row.align" size="small">
+                    <el-option
+                      v-for="item in ALIGN_OPTIONS"
+                      :key="item.value"
+                      :label="item.label"
+                      :value="item.value"
+                    />
+                  </el-select>
+                </template>
+              </el-table-column>
               <!-- 需求 002 第 5 条：列表排序 / 搜索排序 -->
               <el-table-column label="列表排序" width="80">
                 <template #default="{ row }">
@@ -232,19 +273,25 @@
         <el-form-item label="操作列配置">
           <div style="width: 100%">
             <el-row :gutter="8">
-              <el-col :span="8">
+              <el-col :span="6">
+                <div class="op-row">
+                  <el-checkbox v-model="form.operations.look">允许查看详情</el-checkbox>
+                  <el-input v-model="form.operations.lookPermission" size="small" placeholder="权限码 data:look" />
+                </div>
+              </el-col>
+              <el-col :span="6">
                 <div class="op-row">
                   <el-checkbox v-model="form.operations.create">允许新增</el-checkbox>
                   <el-input v-model="form.operations.createPermission" size="small" placeholder="权限码 data:create" />
                 </div>
               </el-col>
-              <el-col :span="8">
+              <el-col :span="6">
                 <div class="op-row">
                   <el-checkbox v-model="form.operations.update">允许修改</el-checkbox>
                   <el-input v-model="form.operations.updatePermission" size="small" placeholder="权限码 data:update" />
                 </div>
               </el-col>
-              <el-col :span="8">
+              <el-col :span="6">
                 <div class="op-row">
                   <el-checkbox v-model="form.operations.delete">允许删除</el-checkbox>
                   <el-input v-model="form.operations.deletePermission" size="small" placeholder="权限码 data:delete" />
@@ -427,7 +474,7 @@ import Sortable from "sortablejs";
 import { dictApi, tableConfigApi } from "@/api";
 import { PRESET_PATTERNS, listValidators } from "@/components/table/validators";
 // 界面配置的默认值 / 合并逻辑和 <Table> 组件共用一份，避免两处默认值各写各的
-import { resolveTableUiConfig } from "@/components/table/types";
+import { resolveTableUiConfig, type FieldAlign } from "@/components/table/types";
 import { useAuthStore } from "@/stores/auth";
 
 const router = useRouter();
@@ -444,6 +491,8 @@ interface DesignerField {
   editable: boolean;
   required: boolean;
   width?: number;
+  /** 列表列的对齐方式（表头和单元格共用） */
+  align: FieldAlign;
   dictCode: string;
   /** 列表显示排序（需求 002 第 5 条） */
   listSort: number;
@@ -491,6 +540,12 @@ const FIELD_TYPES = [
   { value: "date", label: "日期" },
   { value: "datetime", label: "日期时间" },
   { value: "json", label: "JSON" },
+];
+
+const ALIGN_OPTIONS: Array<{ value: FieldAlign; label: string }> = [
+  { value: "left", label: "居左" },
+  { value: "center", label: "居中" },
+  { value: "right", label: "居右" },
 ];
 
 const SEARCH_OPS = [
@@ -548,11 +603,15 @@ const form = reactive({
   remark: "",
   searchMode: "AND",
   pageSize: 20,
+  readScope: "ALL",
+  writeScope: "ALL",
   fields: [] as DesignerField[],
   operations: {
+    look: true,
     create: true,
     update: true,
     delete: true,
+    lookPermission: "data:look",
     createPermission: "data:create",
     updatePermission: "data:update",
     deletePermission: "data:delete",
@@ -594,6 +653,7 @@ function emptyField(index: number): DesignerField {
     editable: true,
     required: false,
     width: undefined,
+    align: "left",
     dictCode: "",
     listSort: index,
     searchSort: index,
@@ -644,11 +704,15 @@ function resetForm(): void {
   form.remark = "";
   form.searchMode = "AND";
   form.pageSize = 20;
+  form.readScope = "ALL";
+  form.writeScope = "ALL";
   form.fields = [emptyField(0)];
   form.operations = {
+    look: true,
     create: true,
     update: true,
     delete: true,
+    lookPermission: "data:look",
     createPermission: "data:create",
     updatePermission: "data:update",
     deletePermission: "data:delete",
@@ -673,6 +737,9 @@ async function openEdit(row: any): Promise<void> {
   form.remark = detail.remark || "";
   form.searchMode = detail.searchMode || "AND";
   form.pageSize = detail.pageSize || 20;
+  // 数据范围：老配置没有这两个字段时按 ALL（保持原行为）
+  form.readScope = detail.readScope === "OWN" ? "OWN" : "ALL";
+  form.writeScope = detail.writeScope === "OWN" ? "OWN" : "ALL";
   // 界面配置：库里可能为空（没配过），此时显示内置默认值
   form.configText = configTextOf(detail.config);
   form.fields = (detail.fields || []).map((field: any) => ({
@@ -686,6 +753,7 @@ async function openEdit(row: any): Promise<void> {
     editable: field.editable !== false,
     required: field.required === true,
     width: field.width,
+    align: field.align || "left",
     dictCode: field.options?.dict || "",
     listSort: field.listSort ?? field.sort ?? 0,
     searchSort: field.searchSort ?? field.sort ?? 0,
@@ -700,9 +768,11 @@ async function openEdit(row: any): Promise<void> {
   }));
   const operations = detail.operations || {};
   form.operations = {
+    look: operations.look !== false,
     create: operations.create !== false,
     update: operations.update !== false,
     delete: operations.delete !== false,
+    lookPermission: operations.lookPermission || "data:look",
     createPermission: operations.createPermission || "data:create",
     updatePermission: operations.updatePermission || "data:update",
     deletePermission: operations.deletePermission || "data:delete",
@@ -832,6 +902,8 @@ async function save(): Promise<void> {
     remark: form.remark,
     searchMode: form.searchMode,
     pageSize: Number(form.pageSize) || 20,
+    readScope: form.readScope,
+    writeScope: form.writeScope,
     // 文本域清空时传 null，表示「没配过」，前端会用内置默认值
     config: uiConfig,
     fields: form.fields.map((field, index) => ({
@@ -844,6 +916,7 @@ async function save(): Promise<void> {
       editable: field.editable,
       required: field.required,
       width: field.width || undefined,
+      align: field.align,
       sort: index,
       // 需求 002 第 5 条：列表/搜索/表单各自的排序 + 表单显示与栅格 + 校验规则
       listSort: Number(field.listSort) || 0,

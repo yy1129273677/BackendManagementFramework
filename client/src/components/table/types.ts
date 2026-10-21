@@ -8,6 +8,9 @@
 /** 字段类型 */
 export type FieldType = "string" | "text" | "number" | "integer" | "boolean" | "date" | "datetime" | "json";
 
+/** 列表列的对齐方式：表头和单元格共用 */
+export type FieldAlign = "left" | "center" | "right";
+
 /** 搜索方式 */
 export type SearchOp =
   | "eq"
@@ -45,6 +48,8 @@ export interface TableField {
   editable?: boolean;
   required?: boolean;
   width?: number;
+  /** 列表列的对齐方式（表头 + 单元格）；不填按左对齐 */
+  align?: FieldAlign;
   /** 自定义单元格插槽名，默认 col-<字段名> */
   slot?: string;
   options?: {
@@ -71,6 +76,10 @@ export interface TableRow {
   id: string;
   created_at?: string;
   updated_at?: string;
+  /** 创建人用户 id（行级隔离用；历史数据为 null） */
+  created_by?: string | null;
+  /** 创建人名称（后端只在读/写范围为 ALL 时补；历史数据或已删除用户为 null） */
+  creatorName?: string | null;
   [key: string]: any;
 }
 
@@ -86,9 +95,12 @@ export interface CustomAction {
 
 /** 操作列权限（后端已经算好了当前用户能不能做） */
 export interface TableOperations {
+  /** 查看详情（弹框展示只读详情） */
+  look: boolean;
   create: boolean;
   update: boolean;
   delete: boolean;
+  lookPermission?: string;
   createPermission?: string;
   updatePermission?: string;
   deletePermission?: string;
@@ -169,6 +181,12 @@ export interface TableConfig {
   pageSize: number;
   searchMode: "AND" | "OR" | "CUSTOM";
   conditions?: any;
+  /** 生效后的读范围：OWN 时后端只返回自己创建的行（超管/viewAll 已折算成 ALL） */
+  readScope?: "ALL" | "OWN";
+  /** 生效后的写范围：OWN 时只能改/删自己创建的行（超管已折算成 ALL） */
+  writeScope?: "ALL" | "OWN";
+  /** 是否展示「创建人」列：读范围或写范围生效为 ALL 时才为 true */
+  showCreator?: boolean;
   /** 全部字段（含隐藏列，编辑表单要用） */
   fields: TableField[];
   /** 表格要显示的列 */

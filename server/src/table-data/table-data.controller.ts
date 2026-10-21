@@ -65,7 +65,7 @@ export class TableDataController {
   @ApiOperation({
     summary: "分页查询表格数据",
     description:
-      'filters 是结构化条件组的 JSON 字符串，不是原始 SQL WHERE。格式：{"conditions":[{"field":"status","op":"eq","value":"paid"}]}；CUSTOM 模式下可用 {"mode":"CUSTOM","group":{"logic":"OR","not":false,"conditions":[...],"groups":[...]}} 做任意 AND/OR/NOT 嵌套。op 支持 eq/ne/like/notLike/gt/gte/lt/lte/in/notIn/between/isNull/notNull；field 必须是配置里 searchable=true 的字段。不需要全局 data:read，勾选对应菜单即可读。',
+      'filters 是结构化条件组的 JSON 字符串，不是原始 SQL WHERE。格式：{"conditions":[{"field":"status","op":"eq","value":"paid"}]}；CUSTOM 模式下可用 {"mode":"CUSTOM","group":{"logic":"OR","not":false,"conditions":[...],"groups":[...]}} 做任意 AND/OR/NOT 嵌套。op 支持 eq/ne/like/notLike/gt/gte/lt/lte/in/notIn/between/isNull/notNull；field 必须是配置里 searchable=true 的字段。不需要全局 data:read，勾选对应菜单即可读。表格的数据范围为「仅本人」时，只返回当前用户创建的行（超管和命中 data:viewAll 权限的用户除外）。',
   })
   @ApiParam({ name: "tcid", description: "表格配置编号，必须存在且属于当前子系统", example: "TDEMOORDERS" })
   @ApiQuery({ name: "page", required: false, description: "页码，从 1 开始，默认 1", example: 1 })
@@ -90,8 +90,9 @@ export class TableDataController {
     @Query("page") page?: string,
     @Query("pageSize") pageSize?: string,
     @Query("filters") filters?: string,
+    @Headers("x-route-id") routeId?: string,
   ) {
-    return this.service.query(systemId, tcid, { page, pageSize, filters }, user);
+    return this.service.query(systemId, tcid, { page, pageSize, filters }, user, routeId);
   }
 
   @ApiOperation({
@@ -114,7 +115,7 @@ export class TableDataController {
   @ApiOperation({
     summary: "修改一条数据",
     description:
-      "只修改传入且 editable 的字段；没有可修改字段返回 400，数据不存在返回 404。需要表格开启修改且当前用户具备权限码（按 X-Route-Id 区分路由）。",
+      "只修改传入且 editable 的字段；没有可修改字段返回 400，数据不存在返回 404。需要表格开启修改且当前用户具备权限码（按 X-Route-Id 区分路由）。表格的写范围为「仅本人」时，只能修改自己创建的行；改别人的行同样返回 404。",
   })
   @ApiParam({ name: "tcid", description: "表格配置编号，必须存在且属于当前子系统", example: "TDEMOORDERS" })
   @ApiParam({ name: "id", description: "数据行 id，必须是 uuid 格式", example: "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d" })
@@ -133,7 +134,7 @@ export class TableDataController {
   @ApiOperation({
     summary: "删除一条数据",
     description:
-      "id 必须是 uuid 格式，数据不存在返回 404。需要表格开启删除且当前用户具备权限码（按 X-Route-Id 区分路由）。",
+      "id 必须是 uuid 格式，数据不存在返回 404。需要表格开启删除且当前用户具备权限码（按 X-Route-Id 区分路由）。表格的写范围为「仅本人」时，只能删除自己创建的行。",
   })
   @ApiParam({ name: "tcid", description: "表格配置编号，必须存在且属于当前子系统", example: "TDEMOORDERS" })
   @ApiParam({ name: "id", description: "数据行 id，必须是 uuid 格式", example: "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d" })

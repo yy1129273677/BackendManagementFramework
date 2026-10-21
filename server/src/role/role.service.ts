@@ -65,7 +65,7 @@ export class RoleService {
       }),
       this.prisma.tableConfig.findMany({
         where: { systemId },
-        select: { tcid: true, name: true, operations: true, customActions: true },
+        select: { tcid: true, name: true, operations: true, customActions: true, readScope: true },
       }),
     ]);
 

@@ -182,6 +182,10 @@ model TableConfig {
   /// 为空表示「没配过」，前端用内置默认值兜底（默认 700 / 1200×960）
   config        Json?
   pageSize      Int      @default(20) @map("page_size")
+  /// 读数据范围：ALL（全系统可见）/ OWN（仅创建人可见；超管和命中 data:viewAll 权限的用户例外）
+  readScope     String   @default("ALL") @map("read_scope") @db.VarChar(8)
+  /// 写数据范围：ALL（有修改权限即可改所有行）/ OWN（只能改自己创建的行）
+  writeScope    String   @default("ALL") @map("write_scope") @db.VarChar(8)
   createdBy     String?  @map("created_by") @db.Uuid
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")

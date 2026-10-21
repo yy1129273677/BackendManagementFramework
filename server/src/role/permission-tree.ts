@@ -1,4 +1,5 @@
 import { ALL_PERMISSIONS } from "../common/constants";
+import { viewAllPermissionCode } from "../common/data-scope";
 import { routeScopedPermission } from "../common/permission-scope";
 import { declaredTcids } from "../route/route-tcids";
 
@@ -40,6 +41,8 @@ export interface TableConfigLike {
   name: string;
   operations?: any;
   customActions?: any;
+  /** 读数据范围：只有 OWN 的表才需要「查看全部数据」这个逃生口 */
+  readScope?: string | null;
 }
 
 /** 树节点 */
@@ -69,7 +72,7 @@ export function menuPermissionCode(routeId: string): string {
 }
 
 /** 表格增删改的默认权限码（按 TCID 隔离，不同表互不影响） */
-export function tableOperationPermission(tcid: string, action: "create" | "update" | "delete"): string {
+export function tableOperationPermission(tcid: string, action: "look" | "create" | "update" | "delete"): string {
   return `data:${action}:${tcid}`;
 }
 
@@ -78,7 +81,8 @@ export function tableActionPermission(tcid: string, value: string): string {
   return `data:action:${tcid}:${value}`;
 }
 
-const OPERATION_LABELS: Record<"create" | "update" | "delete", string> = {
+const OPERATION_LABELS: Record<"look" | "create" | "update" | "delete", string> = {
+  look: "查看详情",
   create: "新增",
   update: "修改",
   delete: "删除",
@@ -161,8 +165,34 @@ export function buildPermissionTree(input: {
     code: "",
     title: "系统功能",
     type: "group",
-    children: [...functionGroups.entries()].map(([groupName, items]) =>
-      makeNode({
+    children: [...functionGroups.entries()].map(([groupName, items]) => {
+      // 把分组里的「查看」权限（`*:read`）嫁接到分组节点上：
+      //   勾选「用户」= 拿到 user:read（能进入用户管理并查看列表），和「菜单与按钮」里
+      //   「勾选菜单 = 能看到页面」保持一致。
+      //   剩下的新增/修改/删除继续挂在下面，单独勾选（前端 check-strictly，父子不联动）。
+      const readItem = items.find((item) => item.code.endsWith(":read"));
+      if (readItem) {
+        return makeNode({
+          keyBase: `group:functions:${groupName}`,
+          code: readItem.code,
+          title: groupName,
+          type: "function",
+          note: `勾选后：能进入「${groupName}」并查看（${readItem.code}）`,
+          children: items
+            .filter((item) => item !== readItem)
+            .map((item) =>
+              makeNode({
+                keyBase: `function:${item.code}`,
+                code: item.code,
+                title: `${item.name}（${item.code}）`,
+                type: "function",
+              }),
+            ),
+        });
+      }
+
+      // 没有 `:read` 的分组（比如「主系统」只有 system:manage）保持纯展示分组
+      return makeNode({
         keyBase: `group:functions:${groupName}`,
         code: "",
         title: groupName,
@@ -175,8 +205,8 @@ export function buildPermissionTree(input: {
             type: "function",
           }),
         ),
-      }),
-    ),
+      });
+    }),
   });
 
   // ---------- 2. 菜单与按钮 ----------
@@ -238,7 +268,7 @@ export function buildPermissionTree(input: {
       const base = operations[`${action}Permission`] || tableOperationPermission(tcid, action);
       const code = scoped(base);
       const title = `${OPERATION_LABELS[action]}（${config.name}）`;
-      // 没有按 TCID 后缀的 data:create / data:update / data:delete 就是老数据的全局码
+      // 没有按 TCID 后缀的 data:look / data:create / data:update / data:delete 就是老数据的全局码
       const isGlobalLegacy = base === `data:${action}`;
 
       target.children!.push(
@@ -248,6 +278,23 @@ export function buildPermissionTree(input: {
           title,
           type: "button",
           note: noteForCode(code, title, isGlobalLegacy),
+        }),
+      );
+    }
+
+    // 读范围为「仅本人」时，额外给一个「查看全部数据」的逃生口：
+    // 公告这类表常见「员工看自己、经理看全部」，不必为此改表配置。
+    if (String(config.readScope || "ALL").toUpperCase() === "OWN") {
+      const base = viewAllPermissionCode(tcid);
+      const code = scoped(base);
+      const title = `查看全部数据（${config.name}）`;
+      target.children!.push(
+        makeNode({
+          keyBase: `menu:${routeId}:button:${tcid}:viewAll`,
+          code,
+          title,
+          type: "button",
+          note: "仅对读范围为「仅本人」的表格生效；勾选后能看到所有人创建的数据（含切换前没有创建人的历史数据）",
         }),
       );
     }

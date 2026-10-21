@@ -54,6 +54,7 @@ const RESERVED_WORDS = new Set([
   "id",
   "created_at",
   "updated_at",
+  "created_by",
   "pg_catalog",
   "information_schema",
 ]);

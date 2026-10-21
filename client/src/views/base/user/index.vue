@@ -14,7 +14,7 @@
           @keyup.enter="handleSearch"
         />
         <el-button @click="handleSearch">搜索</el-button>
-        <el-button type="primary" @click="openCreate">新建用户</el-button>
+        <el-button v-if="auth.hasPermission('user:create')" type="primary" @click="openCreate">新建用户</el-button>
       </div>
     </div>
 
@@ -37,10 +37,19 @@
       <el-table-column prop="createdAt" label="创建时间" min-width="180">
         <template #default="{ row }">{{ String(row.createdAt).replace("T", " ").slice(0, 19) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="140" fixed="right">
+      <el-table-column
+        v-if="auth.hasPermission('user:update') || auth.hasPermission('user:delete')"
+        label="操作"
+        width="140"
+        fixed="right"
+      >
         <template #default="{ row }">
-          <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-          <el-button link type="danger" size="small" @click="remove(row)">删除</el-button>
+          <el-button v-if="auth.hasPermission('user:update')" link type="primary" size="small" @click="openEdit(row)">
+            编辑
+          </el-button>
+          <el-button v-if="auth.hasPermission('user:delete')" link type="danger" size="small" @click="remove(row)">
+            删除
+          </el-button>
         </template>
       </el-table-column>
     </el-table>

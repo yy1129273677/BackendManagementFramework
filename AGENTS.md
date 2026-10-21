@@ -261,9 +261,11 @@ cp .env.example .env
 npx prisma migrate deploy        # 建表
 npm run seed                     # 造超管 + demo 数据
 npm run start:dev                # 开发，端口 3000
-npm test                         # 139 个单测，不需要数据库
+npm test                         # 153 个单测，不需要数据库
 npm run migrate:002:dry          # 权限码迁移预览（老表全局码 → 按 TCID，幂等）
 npm run migrate:002              # 执行迁移（单事务，失败回滚）
+npm run migrate:003:dry          # 数据范围迁移预览（给所有业务表补 created_by，幂等）
+npm run migrate:003              # 执行迁移（新增产出表需要）
 
 # ---------- 前端 ----------
 cd client
@@ -302,7 +304,7 @@ npm run dev                      # 端口 5173，/api 代理到 3000
 ## 12. 需求 002 之后的约定（重要）
 
 1. **权限码是动态的，且表格按钮权限「按路由区分」**：
-   `menu:<routeId>`、`data:create:<tcid>`（老的基础码）、
+   `menu:<routeId>`、`data:look:<tcid>` / `data:create:<tcid>`（老的基础码）、
    **`data:create:<tcid>:route:<routeId>`（权限树生成的新格式）**。
    同一张表被多条路由引用时，每条路由生成独立权限码，取消一条路由下的按钮不影响另一条。
    前端请求拦截器会把当前动态路由 id 放进 `X-Route-Id` 请求头，
@@ -328,9 +330,13 @@ npm run dev                      # 端口 5173，/api 代理到 3000
    前端角色页直接用后端返回的 `{tree, keyMap}`，不要自己拼权限码。
    树的结构（两组）：
    - **系统功能**：按 `ALL_PERMISSIONS.group` 二级分组（表格数据组除外）。
+     分组里的「查看」权限（`*:read`）嫁接到分组节点上：勾选「用户」= `user:read`（能进入并查看），
+     新增/修改/删除挂在下面单独勾选，交互和「菜单与按钮」一致。
+     没有 `:read` 的分组（如「主系统」只有 `system:manage`）仍是纯展示节点。
      **主系统显示全部；子系统只显示「用户」「角色」两组**（`availableFunctions`，有单测）——
      路由/字典/表格配置/子系统管理由主系统超管维护，不下放给租户。
-   - **分组节点（系统功能/菜单与按钮/二级分组）只做展示，不显示复选框**（`type=group`，本身没有权限码）。
+   - **纯分组节点（系统功能 / 菜单与按钮 / 没有 `:read` 的二级分组）只做展示，不显示复选框**
+     （`type=group`，本身没有权限码）。
    - **菜单与按钮**：菜单节点；TABLE 菜单下面挂这张表的按钮，
      CUSTOM 页面按 JSON 配置里的 `tcids` 挂对应表的按钮。
      **按钮权限码 = `<基础码>:route:<routeId>`**（每条路由独立，见第 1 条）。
@@ -359,6 +365,7 @@ npm run dev                      # 端口 5173，/api 代理到 3000
 7. **表格字段的表单属性**：`listSort / searchSort / formSort / formVisible / formSpan / rules`，
    后端 `normalizeFields` 负责默认值和校准（`formSpan` 限制 1~24、正则必须能编译），
    前端 `<Table>` 负责按它排序、24 栅格布局、校验。
+   列表列的对齐方式用 `align`（`left / center / right`），**表头和单元格共用同一个值**，不填按左对齐。
 
 8. **校验规则只存「正则字符串 + 校验器名字」**，**禁止把 JS 代码存数据库执行**；
    自定义校验函数写在 `client/src/components/table/validators.ts`，用 `registerValidator` 注册。
@@ -373,6 +380,23 @@ npm run dev                      # 端口 5173，/api 代理到 3000
 
 10. **需求文档流程**：需求先出「整理版」（`docs/requirements/00X-...-整理版.md`，含我的判断与待确认点），
     确认后再开发、回填实现对照，并删掉原始需求文件。
+
+11. **表级数据范围（行级隔离，需求 005）**：
+    - `sys_table_config.read_scope / write_scope` 两个独立开关，取值 `ALL`（默认）/ `OWN`。
+      `read_scope=OWN` → 列表只返回 `created_by = 当前用户` 的行；
+      `write_scope=OWN` → 修改/删除的 SQL 追加同一条件，影响 0 行就返回 404（不暴露记录存在性）。
+    - 业务物理表固定列新增 `created_by uuid`（可空、有索引），由服务端在 `create()` 时写入，
+      **不接受前端传值**；`created_by` 已加入 `identifiers.ts` 保留列，不能配成业务字段。
+    - 超管始终无视两个范围；`read_scope=OWN` 时，命中 `data:viewAll:<tcid>`
+      （权限树里是 `<基础码>:route:<routeId>`）的用户也能看全部。
+      **viewAll 只放开读，不放开写**。
+    - 历史数据 `created_by` 为 NULL：`OWN` 下除超管 / viewAll 外不可见。
+      存量表用 `npm run migrate:003` 补列，新表由 DDL 自动带上。
+    - 列表的「创建人」列是系统列，**只在生效后的读范围或写范围为 `ALL` 时展示**
+      （`renderConfig.showCreator`）；读写都是 `OWN` 时不展示，后端也不会去查用户名。
+      权限树里的「查看全部数据」节点同理，只在 `read_scope=OWN` 时生成。
+    - 权限判断必须在后端；前端 `Table` 组件只按生效后的 `writeScope` + `row.created_by`
+      隐藏别人行的编辑/删除按钮，不能替代后端校验。
 
 ---
 

@@ -13,7 +13,7 @@ export class CreateTableConfigDto {
   /** 字段定义数组，至少一个 */
   @ApiProperty({
     description:
-      "字段定义数组，至少 1 个、最多 60 个。每个字段支持：name（小写字母开头的列名）、label、type（string/text/number/integer/boolean/date/datetime/json）、visible、searchable、searchOp、editable、required、width、slot、options、sort、listSort、searchSort、formSort、formVisible、formSpan（1~24）、rules（pattern/message/validator）",
+      "字段定义数组，至少 1 个、最多 60 个。每个字段支持：name（小写字母开头的列名）、label、type（string/text/number/integer/boolean/date/datetime/json）、visible、searchable、searchOp、editable、required、width、align（left/center/right，表头和单元格共用）、slot、options、sort、listSort、searchSort、formSort、formVisible、formSpan（1~24）、rules（pattern/message/validator）",
     type: [Object],
     example: [{ name: "order_no", label: "订单号", type: "string", searchable: true, required: true, formSpan: 12 }],
   })
@@ -36,12 +36,14 @@ export class CreateTableConfigDto {
   /** 操作列配置 */
   @ApiPropertyOptional({
     description:
-      "操作列配置：{ create, update, delete（是否开启）, createPermission, updatePermission, deletePermission（所需权限码） }；不传则默认全开并按 TCID 生成权限码",
+      "操作列配置：{ look, create, update, delete（是否开启）, lookPermission, createPermission, updatePermission, deletePermission（所需权限码） }；不传则默认全开并按 TCID 生成权限码",
     type: Object,
     example: {
+      look: true,
       create: true,
       update: true,
       delete: true,
+      lookPermission: "data:look:TDEMOORDERS",
       createPermission: "data:create:TDEMOORDERS",
       updatePermission: "data:update:TDEMOORDERS",
       deletePermission: "data:delete:TDEMOORDERS",
@@ -61,6 +63,20 @@ export class CreateTableConfigDto {
   /** 每页条数 */
   @ApiPropertyOptional({ description: "每页条数，取值范围 1~200，不填默认 20", minimum: 1, maximum: 200, example: 20 })
   pageSize?: number;
+  /** 数据范围：行级隔离 */
+  @ApiPropertyOptional({
+    description:
+      "读数据范围：ALL（默认，全系统可见）/ OWN（仅创建人可见；超管和命中 data:viewAll:<tcid> 权限的用户例外）",
+    enum: ["ALL", "OWN"],
+    example: "ALL",
+  })
+  readScope?: string;
+  @ApiPropertyOptional({
+    description: "写数据范围：ALL（默认，有修改权限即可改所有行）/ OWN（只能改/删自己创建的行；超管例外）",
+    enum: ["ALL", "OWN"],
+    example: "ALL",
+  })
+  writeScope?: string;
   /**
    * 界面配置（表格高度、表单弹框长宽）。
    * 可以是对象，也可以是文本域传上来的 JSON 字符串；
@@ -102,12 +118,14 @@ export class UpdateTableConfigDto {
   conditions?: any;
   @ApiPropertyOptional({
     description:
-      "操作列配置：{ create, update, delete（是否开启）, createPermission, updatePermission, deletePermission（所需权限码） }",
+      "操作列配置：{ look, create, update, delete（是否开启）, lookPermission, createPermission, updatePermission, deletePermission（所需权限码） }",
     type: Object,
     example: {
+      look: true,
       create: true,
       update: true,
       delete: true,
+      lookPermission: "data:look:TDEMOORDERS",
       createPermission: "data:create:TDEMOORDERS",
       updatePermission: "data:update:TDEMOORDERS",
       deletePermission: "data:delete:TDEMOORDERS",
@@ -125,6 +143,19 @@ export class UpdateTableConfigDto {
   customActions?: any[];
   @ApiPropertyOptional({ description: "每页条数，取值范围 1~200", minimum: 1, maximum: 200, example: 20 })
   pageSize?: number;
+  @ApiPropertyOptional({
+    description:
+      "读数据范围：ALL（全系统可见）/ OWN（仅创建人可见；超管和命中 data:viewAll:<tcid> 权限的用户例外）；不传表示不改",
+    enum: ["ALL", "OWN"],
+    example: "OWN",
+  })
+  readScope?: string;
+  @ApiPropertyOptional({
+    description: "写数据范围：ALL（有修改权限即可改所有行）/ OWN（只能改/删自己创建的行；超管例外）；不传表示不改",
+    enum: ["ALL", "OWN"],
+    example: "OWN",
+  })
+  writeScope?: string;
   /** 界面配置；不传表示「不改」，传 null / 空字符串表示「清空，回到内置默认」 */
   @ApiPropertyOptional({
     description:

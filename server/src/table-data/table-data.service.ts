@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { physicalTableName } from "../common/identifiers";
 import { hasPermission } from "../common/permissions";
 import { JwtUser } from "../common/types";
+import { resolveDataScope } from "../common/data-scope";
 import { PrismaService } from "../prisma/prisma.service";
 import { TableConfigService } from "../table-config/table-config.service";
 import { TableField, TableOperations, pgParamCast } from "../table-config/table-field.types";
@@ -90,12 +91,22 @@ export class TableDataService {
    * 返回：
    *   { list, total, page, pageSize }
    */
-  async query(systemId: string, tcid: string, params: QueryParams, user: JwtUser) {
+  async query(systemId: string, tcid: string, params: QueryParams, user: JwtUser, routeId?: string) {
     // 先确认「能看这张表」：勾了对应菜单即可，不再依赖全局 data:read
     await this.assertCanReadTable(systemId, tcid, user);
 
     const config = await this.configService.getByTcid(systemId, tcid);
     const fields = (config.fields || []) as unknown as TableField[];
+
+    // 行级读范围：OWN 时只返回自己创建的行（超管 / data:viewAll 例外）
+    const scope = resolveDataScope({
+      readScope: config.readScope,
+      writeScope: config.writeScope,
+      tcid: config.tcid,
+      isSuper: Boolean(user.isSuper),
+      permissions: user.permissions,
+      routeId,
+    });
 
     // 每页条数：请求值优先，但不能超过 200
     const page = Math.max(1, Number(params.page) || 1);
@@ -119,6 +130,12 @@ export class TableDataService {
       throw new BadRequestException((error as Error).message);
     }
 
+    // 行级隔离条件必须和用户搜索条件「与」在一起，不能覆盖原条件
+    if (!scope.readAll) {
+      const owner = Prisma.sql`"created_by" = ${user.sub}::uuid`;
+      where = where.sql ? Prisma.sql`${where} AND ${owner}` : Prisma.sql`WHERE ${owner}`;
+    }
+
     const table = physicalTableName(config.tcid);
     const offset = (page - 1) * pageSize;
 
@@ -130,12 +147,44 @@ export class TableDataService {
       Prisma.sql`SELECT count(*)::int AS count FROM ${Prisma.raw(table)} ${where}`,
     );
 
+    const plainList = list.map((row) => this.toPlainRow(row));
+
+    // 「创建人」只在能看到别人数据时才有意义：
+    // 读范围 ALL（含超管 / viewAll）或写范围 ALL 时补上名字；
+    // 读写都是 OWN 时列表里只有自己的数据，展示创建人没有信息量。
+    if (scope.readAll || scope.writeAll) {
+      await this.attachCreatorNames(systemId, plainList);
+    }
+
     return {
-      list: list.map((row) => this.toPlainRow(row)),
+      list: plainList,
       total: Number(counted[0]?.count || 0),
       page,
       pageSize,
     };
+  }
+
+  /**
+   * 给列表补「创建人名称」。
+   *
+   * created_by 存的是用户 uuid，直接展示对用户没有意义；这里批量换一次名字。
+   * 历史数据（created_by 为 null）或创建人已被删除时保持 null，前端显示「—」。
+   */
+  private async attachCreatorNames(systemId: string, rows: Array<Record<string, any>>): Promise<void> {
+    const ids = [
+      ...new Set(rows.map((row) => row.created_by).filter((id): id is string => typeof id === "string" && !!id)),
+    ];
+    if (ids.length === 0) return;
+
+    const users = await this.prisma.user.findMany({
+      where: { systemId, id: { in: ids } },
+      select: { id: true, username: true, nickname: true },
+    });
+    const nameMap = new Map(users.map((user) => [user.id, user.nickname || user.username]));
+
+    for (const row of rows) {
+      row.creatorName = row.created_by ? (nameMap.get(row.created_by) ?? null) : null;
+    }
   }
 
   /**
@@ -171,17 +220,25 @@ export class TableDataService {
     }
 
     const table = physicalTableName(config.tcid);
+    // 固定列 created_by 由服务端写入，body 里就算传了也不会被采纳（可编辑字段来自配置白名单）
+    const creatorSql = Prisma.sql`${user.sub}::uuid`;
 
     // 一个字段都没填 → 插入一行全空记录（数据库层面允许，方便做占位）
     if (columns.length === 0) {
       const rows = await this.prisma.$queryRaw<Array<Record<string, any>>>(
-        Prisma.sql`INSERT INTO ${Prisma.raw(table)} DEFAULT VALUES RETURNING *`,
+        Prisma.sql`INSERT INTO ${Prisma.raw(table)} ("created_by") VALUES (${creatorSql}) RETURNING *`,
       );
       return this.toPlainRow(rows[0]);
     }
 
-    const columnSql = Prisma.join(columns.map((field) => Prisma.raw(`"${field.name}"`)));
-    const valueSql = Prisma.join(columns.map((field, index) => this.valueFragment(field, values[index])));
+    const columnSql = Prisma.join([
+      Prisma.raw(`"created_by"`),
+      ...columns.map((field) => Prisma.raw(`"${field.name}"`)),
+    ]);
+    const valueSql = Prisma.join([
+      creatorSql,
+      ...columns.map((field, index) => this.valueFragment(field, values[index])),
+    ]);
 
     const rows = await this.prisma.$queryRaw<Array<Record<string, any>>>(
       Prisma.sql`INSERT INTO ${Prisma.raw(table)} (${columnSql}) VALUES (${valueSql}) RETURNING *`,
@@ -211,10 +268,21 @@ export class TableDataService {
     }
 
     const table = physicalTableName(config.tcid);
+    // 行级写范围：OWN 时只能改自己创建的行；改别人的行影响 0 行 → 404，不暴露记录是否存在
+    const scope = resolveDataScope({
+      readScope: config.readScope,
+      writeScope: config.writeScope,
+      tcid: config.tcid,
+      isSuper: Boolean(user.isSuper),
+      permissions: user.permissions,
+      routeId,
+    });
+    const owner = scope.writeAll ? Prisma.empty : Prisma.sql`AND "created_by" = ${user.sub}::uuid`;
+
     const rows = await this.prisma.$queryRaw<Array<Record<string, any>>>(
       Prisma.sql`UPDATE ${Prisma.raw(table)}
                        SET ${Prisma.join(assignments)}, "updated_at" = now()
-                       WHERE "id" = ${id}::uuid
+                       WHERE "id" = ${id}::uuid ${owner}
                        RETURNING *`,
     );
 
@@ -230,8 +298,19 @@ export class TableDataService {
     this.assertOperation(user, operations, "delete", routeId);
 
     const table = physicalTableName(config.tcid);
+    // 行级写范围：OWN 时只能删自己创建的行
+    const scope = resolveDataScope({
+      readScope: config.readScope,
+      writeScope: config.writeScope,
+      tcid: config.tcid,
+      isSuper: Boolean(user.isSuper),
+      permissions: user.permissions,
+      routeId,
+    });
+    const owner = scope.writeAll ? Prisma.empty : Prisma.sql`AND "created_by" = ${user.sub}::uuid`;
+
     const rows = await this.prisma.$queryRaw<Array<{ id: string }>>(
-      Prisma.sql`DELETE FROM ${Prisma.raw(table)} WHERE "id" = ${id}::uuid RETURNING "id"`,
+      Prisma.sql`DELETE FROM ${Prisma.raw(table)} WHERE "id" = ${id}::uuid ${owner} RETURNING "id"`,
     );
 
     if (!rows || rows.length === 0) throw new NotFoundException("要删除的数据不存在");

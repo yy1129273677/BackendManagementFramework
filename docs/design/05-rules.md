@@ -39,9 +39,28 @@
 | `operations.create = true`  | 用户有 `createPermission` | ✅ 允许                                    |
 | 超管                        | —                         | ✅ 永远允许（通配权限）                    |
 
-- 默认权限码：`data:create` / `data:update` / `data:delete`
+- 默认权限码：`data:look` / `data:create` / `data:update` / `data:delete`
 - 可以在配置里改成别的权限码（比如把删除限制成 `data:delete:order`），只要角色里也配了对应码
 - 前端返回的 `config.operations.create` 已经是「A && B」的结果，前端不用自己算
+
+### 2.1 行级数据范围（需求 005）
+
+在上面「功能权限」之外，再叠加一层「行级范围」，由表格配置的两个独立开关控制：
+
+| 配置                        | 读（列表/详情）                   | 写（修改/删除）                        |
+| --------------------------- | --------------------------------- | -------------------------------------- |
+| `read_scope = ALL`（默认）  | 全系统可见                        | —                                      |
+| `read_scope = OWN`          | 只看 `created_by = 当前用户` 的行 | —                                      |
+| `write_scope = ALL`（默认） | —                                 | 有操作权限即可改/删所有行              |
+| `write_scope = OWN`         | —                                 | 只能改/删 `created_by = 当前用户` 的行 |
+
+- 例外：超管始终全量；`read_scope = OWN` 时，命中 `data:viewAll:<tcid>` 权限的用户也能看全部（**只放开读**）。
+- 业务物理表固定列 `created_by uuid` 由服务端写入，前端不可传；新表由 DDL 自动带，存量表用 `npm run migrate:003` 补列。
+- 历史数据 `created_by` 为 NULL：`OWN` 下除超管 / viewAll 外不可见。
+- 写范围 `OWN` 时，改别人的行会命中 0 行并返回 404（不暴露记录是否存在）。
+- 列表的「创建人」列只在生效后的读范围或写范围为 `ALL` 时展示（`renderConfig.showCreator`）；
+  读写都是 `OWN` 时隐藏，后端也不补用户名。权限树的「查看全部数据」节点只在 `read_scope=OWN` 时生成。
+- 常见组合：公告栏 `read=ALL, write=OWN`（互相看、只能改自己的）；个人草稿 `read=OWN, write=OWN`。
 
 ## 3. 搜索模式怎么选（给配置者的决策表）
 
