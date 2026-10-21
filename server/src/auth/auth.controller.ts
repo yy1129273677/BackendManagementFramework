@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Post } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Throttle } from "@nestjs/throttler";
 import { Public } from "../common/decorators";
 import { CurrentUser } from "../common/param-decorators";
 import { JwtUser } from "../common/types";
@@ -20,6 +21,9 @@ export class AuthController {
    * 不需要 token（@Public），否则就成了「要先登录才能登录」的死循环。
    */
   @Public()
+  // 登录是最容易被暴力破解的接口：同一 IP 每分钟最多 5 次，超过返回 429。
+  // 注意限流按 IP 计算，所以 main.ts 里必须配置 trust proxy，否则所有用户会共用 Nginx 容器的 IP。
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({
     summary: "登录（公开接口，无需 token）",
     description:

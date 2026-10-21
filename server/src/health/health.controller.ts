@@ -1,5 +1,6 @@
 import { Controller, Get } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { SkipThrottle } from "@nestjs/throttler";
 import { Public } from "../common/decorators";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -14,6 +15,8 @@ import { PrismaService } from "../prisma/prisma.service";
  *   这个接口不需要登录，也不返回任何敏感信息（不返回数据库地址、账号）。
  */
 @ApiTags("健康检查")
+// 探活接口不参与限流：监控/容器编排可能高频轮询，把它算进全局配额会误伤正常请求。
+@SkipThrottle()
 @Controller("health")
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}

@@ -47,7 +47,7 @@ npm install
 npx prisma migrate deploy        # 建表
 npm run seed                     # 造超管 + demo 数据
 npm run start:dev                # 开发，端口 3000
-npm test                         # 130 个单测，不需要数据库
+npm test                         # 138 个单测，不需要数据库
 npm run build                    # prisma generate + nest build
 npm run migrate:002:dry          # 权限码迁移预览（老表全局码 → 按 TCID，幂等）
 npm run migrate:002              # 执行迁移（单事务，失败回滚）
@@ -171,7 +171,7 @@ docs/
 ├── README.md             # 文档索引
 ├── glossary.md           # 术语表
 ├── requirements/         # 需求（人写的、可核对的）
-├── design/               # 设计（01 背景 … 06 失败模式）
+├── design/               # 设计（01 背景 … 06 失败模式、07 安全基线）
 └── adr/                  # 架构决策记录
 ```
 
@@ -300,3 +300,71 @@ docs/
 
 10. **需求文档流程**：需求先出「整理版」（`docs/requirements/00X-...-整理版.md`，含我的判断与待确认点），
     确认后再开发、回填实现对照，并删掉原始需求文件。
+
+---
+
+## 10. 新增接口时的 Swagger 规范（必须遵守）
+
+> 为什么定这个：Swagger 只认**声明式元数据**，不认 TypeScript 类型（编译后类型会被擦除）。
+> 不写装饰器，文档里就只剩接口路径，请求体显示成 `{}`——等于没有文档。
+
+1. **controller 层**
+   - 类上必须有 `@ApiTags("中文分组")`。
+   - 需要登录的加 `@ApiBearerAuth()`；公开接口（如健康检查）不写，并在方法上加 `@Public()`。
+   - 用到 `X-System-Code` / `X-Route-Id` 这类自定义请求头时，用 `@ApiHeader` 说明用途和示例。
+2. **每个路由方法必须有 `@ApiOperation({ summary })`**
+   - `summary` 用一句中文说清"这个接口干什么"，不要写"接口1"这种废话。
+   - 有副作用、权限要求、状态机限制、返回值特殊含义时，补 `description`。
+3. **路径参数 / query 参数**
+   - 路径参数用 `@ApiParam({ name, description, example })`。
+   - query 参数用 `@ApiQuery({ name, required, description, example })`，`required` 要和 `@Query` 的实际可选性一致。
+4. **请求体必须是 DTO 类**
+   - 每个字段加 `@ApiProperty` / `@ApiPropertyOptional`（TS 里带 `?` 的用 Optional）。
+   - `description` 写中文业务含义和约束；`example` 必须是**真实可用**的值，禁止 `"string"` 这类占位。
+   - 有取值范围的补 `enum` / `format` / `minLength` / `maximum` 等（只在源码确实校验了该约束时才写）。
+   - 字段语义复杂的（对象数组），用 `type: Object` + `description` 写清结构，**不要为了文档新建 DTO 类**。
+5. **无法静态建模的接口**（如表格数据的动态字段）
+   - 允许 `Record<string, any>`，不新建 DTO；但必须在 `@ApiOperation.description` 里写清字段规则
+     （例如：只写入配置里 `editable` 的字段、`required` 为空返回 400）。
+6. **禁止**：只加 `@ApiTags` 就完事；`summary` 用英文或重复方法名；文档描述和实际校验逻辑不一致。
+7. **自检命令**（在 `server/` 下）：`npx tsc --noEmit -p tsconfig.json`。
+8. **参考实现**：`server/src/auth/auth.dto.ts`、`server/src/auth/auth.controller.ts`、
+   `server/src/table-data/table-data.controller.ts`、`server/src/table-config/table-config.dto.ts`。
+
+---
+
+## 11. 后端安全基线（必须遵守）
+
+> 完整版见 [`docs/design/07-security.md`](docs/design/07-security.md)（含现状盘点、缺失项和工具链建议）。
+> 下面只列**写代码时必须过的硬性项**。
+
+1. **认证**：全局已注册 `JwtAuthGuard → SystemContextGuard → PermissionsGuard`，
+   新增接口默认受保护。**唯一的放行方式是显式 `@Public()`**，且必须在 `@ApiOperation.summary` 里标注"公开接口"。
+2. **授权**：特权操作加 `@RequirePermissions("权限码")`，并同步后端 `ALL_PERMISSIONS`、前端 `permissions.ts`、
+   `docs/design/05-rules.md` 权限矩阵（见 §6）。
+3. **多租户**：任何查询必须带 `systemId`（见 §5 第 7 条），漏了就是跨租户泄露。
+4. **输入校验**
+   - 静态结构的接口必须用 DTO 类，禁止用 `any` 接 `@Body()`。
+   - 动态表格接口允许 `Record<string, any>`，但**必须**经 `editable` 白名单过滤 + 类型转换，
+     不能把 body 原样拼进 SQL。
+   - **不要照着通用模板把 `ValidationPipe` 改成 `whitelist: true, forbidNonWhitelisted: true`**：
+     本项目 DTO 没用 `class-validator` 装饰器，开了会把所有字段剥光；`table-data` 的动态 body 还会被直接 400。
+     真要改，必须先给全部 DTO 补校验装饰器，并单独评估动态表格接口。
+5. **响应字段**：Prisma 查询必须显式 `select`（或手工组装白名单），
+   禁止原样返回 Prisma model；禁止返回 `passwordHash`、`password`、`token`、`secret`、`DATABASE_URL`
+   以及任何环境变量/连接串。
+6. **SQL**：值一律参数化；表名/列名必须过 `common/identifiers.ts`；禁止把用户输入拼进 SQL 文本（见 §5）。
+7. **限流**：已接入 `@nestjs/throttler`。全局 **120 次/分钟/IP**（`app.module.ts`），
+   登录接口单独 **5 次/分钟**（`auth.controller.ts` 的 `@Throttle`），健康检查 `@SkipThrottle()` 豁免。
+   **新增加密、验证码、导入导出这类可爆破/重开销接口，必须用 `@Throttle` 单独收紧**；
+   超过阈值返回 429「请求太频繁，请稍后再试」。
+   限流按 IP 统计，依赖 `main.ts` 的 `trust proxy`（只信任内网代理），改它之前先想清楚。
+8. **安全响应头**：已接入 `helmet`（`main.ts`）。CSP 故意关闭：本服务唯一的 HTML 是 Swagger UI，
+   它依赖内联脚本；真正的前端页面由 Nginx 托管，CSP 应在 Nginx 层配。
+9. **CORS**：生产（`NODE_ENV=production`）**没配 `CORS_ORIGIN` 会拒绝启动**，这是刻意行为。
+   `origin: true`（任意来源）只在非生产环境生效，不要为了"先跑起来"给生产塞空值。
+10. **自动检查**：`server/src/common/controller-conventions.spec.ts` 会扫源码，断言每个路由有
+    `@ApiOperation`、非公开 controller 有 `@ApiBearerAuth`、静态接口不用 `any` 接 `@Body()`。
+    `npm test` 会一起跑；新增例外必须在文件顶部常量里写明原因，不要删断言。
+11. **交付时自检三问**：这个端点有守卫吗？输入有校验/白名单吗？返回字段安全吗？
+    回答"否"的必须显式说明原因和风险，不能默认省略。

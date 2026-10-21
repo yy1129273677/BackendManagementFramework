@@ -29,6 +29,7 @@
 | `design/04-states.md`                                 | 状态与状态迁移（子系统、表格配置、业务数据）              |
 | `design/05-rules.md`                                  | 业务规则决策表（权限矩阵、字段类型映射、搜索模式）        |
 | `design/06-failure.md`                                | 失败模式与应对（DDL 失败、注入、并发、慢查询…）           |
+| `design/07-security.md`                               | 后端安全基线：强制规则、现状缺口、工具链与人工三问        |
 | `adr/0001-技术栈与TCID动态表格决策.md`                | 架构决策记录：技术栈、物理表 vs JSONB、为什么不开原始 SQL |
 | `diagrams/README.md`                                  | 图放哪、为什么默认写在 markdown 里                        |
 

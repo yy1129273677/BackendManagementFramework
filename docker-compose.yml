@@ -53,6 +53,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?请在根目录 .env 里设置 JWT_SECRET（不要用默认值）}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
       PORT: 3000
+      # 生产标记：main.ts 会据此强制要求 CORS_ORIGIN 已配置（没配直接拒绝启动）
+      NODE_ENV: production
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8081}
       SUPER_ADMIN_USERNAME: ${SUPER_ADMIN_USERNAME:-yy1}
       SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-yy1129273677}
